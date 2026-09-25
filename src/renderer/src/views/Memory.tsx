@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { parseNote } from '../../../core/notes'
 import type { Atlas, NoteSummary } from '../../../core/types'
 import { Markdown } from '../components/Markdown'
+import { Review, useProposals } from './Review'
 
 const ORDER = ['Profile', 'Projects', 'Decisions', 'Ideas', 'Learning', 'Career', 'Work', 'Sessions', 'Outputs', 'Skills', 'Inbox', 'Sources', 'Home']
 
@@ -28,6 +29,7 @@ function when(at: number) {
 export function Memory() {
   const api = window.bluevis
   const [atlas, setAtlas] = useState<Atlas | null>(null)
+  const { proposals, state: importState } = useProposals()
   const [area, setArea] = useState<string>('Profile')
   const [open, setOpen] = useState<NoteSummary | null>(null)
   const [content, setContent] = useState<string>('')
@@ -61,6 +63,19 @@ export function Memory() {
           Areas
         </div>
         <nav className="areas">
+          <button
+            aria-current={area === '__review'}
+            onClick={() => {
+              setArea('__review')
+              setOpen(null)
+            }}
+          >
+            Teach and review
+            <span className="n" style={proposals.length ? { color: 'var(--amber)' } : undefined}>
+              {proposals.length || ''}
+            </span>
+          </button>
+          <div style={{ height: 10 }} />
           {areas.map(([a, n]) => (
             <button
               key={a}
@@ -84,7 +99,9 @@ export function Memory() {
       </aside>
 
       <section className="panel">
-        {open ? (
+        {area === '__review' ? (
+          <Review proposals={proposals} state={importState} />
+        ) : open ? (
           <Reader note={open} content={content} onBack={() => setOpen(null)} />
         ) : (
           <>
@@ -132,7 +149,7 @@ export function Memory() {
                 <span className="mono" style={{ color: 'var(--faint)' }}>
                   {when(c.at)}
                 </span>
-                {!/^Revert|^Record edits|^Initial/.test(c.subject) && (
+                {!/^(Revert|Record edits|Create vault|Import)/.test(c.subject) && (
                   <button className="link-btn" onClick={() => api.memory.revert(c.hash).then(load)} title="Undo this change with a new commit">
                     Revert
                   </button>

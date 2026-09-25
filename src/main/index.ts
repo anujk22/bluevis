@@ -1,8 +1,9 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, screen, session, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, session, shell, systemPreferences } from 'electron'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Settings } from '../core/types'
 import { Brain, label } from './brain'
+import { Importer } from './importer'
 import { discoverProjects } from './projects'
 import { providerHealth } from './providers'
 import { getSettings, updateSettings } from './settings'
@@ -104,6 +105,29 @@ app.whenReady().then(async () => {
     settings: (s) => send('settings', s)
   })
 
+  const importer = new Importer(
+    vault,
+    (s) => send('import:state', s),
+    (p) => send('import:proposals', p)
+  )
+  ipcMain.handle('import:state', () => importer.state)
+  ipcMain.handle('import:proposals', () => importer.list())
+  ipcMain.handle('import:chatgpt', async (_e, path?: string) => {
+    if (path) return void importer.importChatGPT(path)
+    const r = await dialog.showOpenDialog(win!, {
+      title: 'Choose your ChatGPT export',
+      message: 'Select the .zip from ChatGPT (Settings → Data controls → Export) or its conversations.json',
+      properties: ['openFile'],
+      filters: [{ name: 'ChatGPT export', extensions: ['zip', 'json'] }]
+    })
+    if (!r.canceled && r.filePaths[0]) void importer.importChatGPT(r.filePaths[0])
+    return !r.canceled
+  })
+  ipcMain.handle('import:text', (_e, text: string) => importer.importText(text))
+  ipcMain.handle('import:accept', (_e, key: string, edited?: { title?: string; text?: string }) => importer.accept(key, edited))
+  ipcMain.handle('import:reject', (_e, key: string) => importer.reject(key))
+  ipcMain.handle('import:stop', () => importer.stop())
+
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'))
 
   ipcMain.handle('chat:send', (_e, text: string, opts: { via: 'voice' | 'text'; screenshot?: string }) => brain.handle(text, opts))
@@ -119,7 +143,7 @@ app.whenReady().then(async () => {
     brain.delegate({ kind: 'delegate', agent: t.agent, project: t.project, prompt: t.prompt, state: 'proposed' }, undefined, true)
   )
   ipcMain.handle('tasks:stop', (_e, id: string) => tasks.stop(id))
-  ipcMain.handle('projects:list', (_e, force?: boolean) => discoverProjects(getSettings().projectRoots, force))
+  ipcMain.handle('projects:list', (_e, force?: boolean) => discoverProjects(getSettings().projectRoots, force, vault.projectLinks()))
   ipcMain.handle('project:activate', (_e, name?: string) => brain.setActiveProject(name))
   ipcMain.handle('project:reveal', (_e, path: string) => shell.openPath(path))
   ipcMain.handle('memory:atlas', () => vault.atlas())
@@ -180,6 +204,7 @@ app.whenReady().then(async () => {
     globalShortcut.unregisterAll()
     voice.stop()
     tasks.stopAll()
+    importer.stop()
   })
 })
 

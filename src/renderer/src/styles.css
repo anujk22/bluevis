@@ -1647,3 +1647,107 @@ kbd {
     transition-duration: 0.001s !important;
   }
 }
+
+/* ————— Teach and review ————— */
+
+.sources {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.source-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(8, 16, 42, 0.35);
+}
+
+.source-card p {
+  margin: 0;
+  color: var(--mist);
+  font-size: 12.5px;
+}
+
+.source-card textarea {
+  width: 100%;
+  min-height: 74px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(3, 6, 15, 0.5);
+  padding: 9px 11px;
+  font-size: 13px;
+  user-select: text;
+}
+
+.source-card textarea::placeholder {
+  color: var(--faint);
+}
+
+.import-progress {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  margin-bottom: 18px;
+}
+
+.import-progress .row,
+.review-head,
+.proposal-card .row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bar {
+  margin-top: 10px;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(169, 200, 255, 0.1);
+  overflow: hidden;
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--klein), var(--glacier));
+  transition: width 0.6s var(--ease);
+}
+
+.review-head {
+  margin: 8px 0 12px;
+}
+
+.proposals {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.proposal-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(8, 16, 42, 0.35);
+}
+
+.proposal-card h4 {
+  margin: 8px 0 4px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 21px;
+  line-height: 1.15;
+}
+
+.proposal-card p {
+  margin: 0 0 10px;
+  color: var(--bone-2);
+  font-size: 13.5px;
+}

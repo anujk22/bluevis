@@ -53,10 +53,11 @@ v0.1 core loop is built and runs: orb, text chat through Codex/Claude/local, loc
 - [x] Voice sidecar recovers if it dies (restart + honest message)
 
 ### Phase 4: next up
-- [ ] Link vault project notes to repos by `path:` so "Yonder" resolves to its folder (discovered folder names are used today)
-- [ ] ChatGPT export importer: parse `conversations.json`, propose notes for review (never auto-accept assistant suggestions as decisions)
-- [ ] "Life dump" onboarding: a long voice/text brain dump turned into proposed Profile/Project notes
-- [ ] Review queue in Memory view: confirm / edit / reject `needs-review` notes
+- [x] Link vault project notes to repos by `path:` (Yonder → `Hackathons/Shopify`, observed from its git remote)
+- [x] ChatGPT export importer (Memory → Teach and review): active-branch parsing, batched extraction with Codex `--output-schema`, review queue with keep/edit/discard, ledger in `vault/.bluevis/imports.json` so re-imports skip processed threads and never resurrect discarded items
+- [x] "In your own words" dump → proposals through the same pipeline (voice input for it still to do)
+- [x] Review queue for imported proposals
+- [ ] Review flow for the seeded `needs-review` notes (confirm / correct in place)
 - [ ] Menu bar presence and launch at login
 - [ ] Active-app context (frontmost app + window title) with explicit permission
 - [ ] Wake word (openWakeWord) as an opt-in
@@ -66,7 +67,7 @@ v0.1 core loop is built and runs: orb, text chat through Codex/Claude/local, loc
 ## Known issues / notes for the next agent
 - `codex exec` emits feature notices as `error` items; they are mapped to warnings, not failures.
 - Codex brain turns cost ~50k (mostly cached) input tokens each because of Codex's own system prompt.
-- Project names are folder names (e.g. `Shopify` is probably Yonder's repo, unconfirmed).
+- Project names are folder names unless a vault project note sets `path:`.
 - Run `npm run check` before committing. UI changes: take a screenshot of the real app (Playwright `_electron` works).
 - **Testing against the real vault is forbidden.** Launch with `BLUEVIS_PROFILE_DIR=/some/tmp/dir` to get isolated settings and a fresh vault.
 - An unexplained mic activation was seen once during automated testing and did not reproduce; watch for it.

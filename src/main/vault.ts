@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { parseNote, rank, safeTitle, serializeNote, type Frontmatter } from '../core/notes'
 import type { MemoryWrite } from '../core/reply'
@@ -21,7 +22,8 @@ export class Vault {
 
   /** Create the vault from the bundled template on first run and make it a local git repo for history/undo. */
   async ensure(): Promise<void> {
-    if (!existsSync(join(this.root, 'AGENTS.md'))) {
+    const fresh = !existsSync(join(this.root, 'AGENTS.md'))
+    if (fresh) {
       const template = app.isPackaged ? join(process.resourcesPath, 'vault-template') : join(app.getAppPath(), 'vault-template')
       mkdirSync(this.root, { recursive: true })
       cpSync(template, this.root, { recursive: true, force: false, errorOnExist: false })
@@ -32,7 +34,7 @@ export class Vault {
       await this.git(['config', 'user.email', 'bluevis@localhost'])
       writeFileSync(join(this.root, '.gitignore'), '.obsidian/workspace*.json\n.trash/\n')
     }
-    await this.commit('Record edits made outside Bluevis')
+    await this.commit(fresh ? 'Create vault' : 'Record edits made outside Bluevis')
   }
 
   private git(args: string[]) {
@@ -86,6 +88,13 @@ export class Vault {
     return out
   }
 
+  /** Project notes that declare `path:` link a friendly name to a repo folder. */
+  projectLinks(): { title: string; path: string }[] {
+    return this.load()
+      .filter((n) => n.area === 'Projects' && typeof n.data.path === 'string' && n.data.path)
+      .map((n) => ({ title: n.title, path: (n.data.path as string).replace(/^~(?=\/)/, homedir()).replace(/\/$/, '') }))
+  }
+
   async changes(limit = 40): Promise<MemoryChange[]> {
     const r = await this.git(['log', `-${limit}`, '--name-only', '--format=\x1e%h\x1f%ct\x1f%s'])
     if (r.code !== 0) return []
@@ -135,22 +144,22 @@ export class Vault {
   }
 
   /** Persist a memory the brain proposed or the user asked for. Returns the note path and commit hash. */
-  async remember(w: MemoryWrite & { private?: boolean; origin: string }): Promise<{ path: string; hash?: string }> {
-    const stamp = `(${today()}, ${w.origin})`
+  async remember(w: MemoryWrite & { private?: boolean; origin: string; status?: string }): Promise<{ path: string; hash?: string }> {
+    const stamp = `(learned ${today()}; ${w.origin})`
     let rel: string
-    if (w.kind === 'preference') {
-      rel = 'Profile/Preferences.md'
-      this.appendBullet(rel, { title: 'Preferences', status: 'known' }, `${w.text} ${stamp}`)
+    if (w.kind === 'preference' || w.kind === 'goal') {
+      rel = w.kind === 'preference' ? 'Profile/Preferences.md' : 'Profile/Goals and direction.md'
+      this.appendBullet(rel, { title: w.kind === 'preference' ? 'Preferences' : 'Goals and direction', status: 'known' }, `${w.text} ${stamp}`)
     } else if (w.kind === 'project' && w.project) {
       rel = `Projects/${safeTitle(w.project)}.md`
-      this.appendBullet(rel, { title: w.project, status: 'needs-review' }, `${w.title}: ${w.text} ${stamp}`, '## Log')
+      this.appendBullet(rel, { title: w.project, status: w.status ?? 'needs-review' }, `${w.title}: ${w.text} ${stamp}`, '## Log')
     } else {
-      const folder = w.kind === 'decision' ? 'Decisions' : w.kind === 'idea' ? 'Ideas' : 'Inbox'
+      const folder = w.kind === 'decision' ? 'Decisions' : w.kind === 'idea' ? 'Ideas' : w.kind === 'person' ? 'People' : w.kind === 'project' ? 'Projects' : 'Inbox'
       rel = `${folder}/${safeTitle(w.title)}.md`
       const data: Frontmatter = {
         title: w.title,
         type: w.kind,
-        status: w.kind === 'decision' ? 'known' : w.kind === 'idea' ? 'exploratory' : 'needs-review',
+        status: w.status ?? (w.kind === 'decision' ? 'known' : w.kind === 'idea' ? 'exploratory' : 'needs-review'),
         source: w.origin,
         learned: today(),
         updated: today()

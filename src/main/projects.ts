@@ -39,11 +39,17 @@ function titleCase(name: string): string {
     .trim()
 }
 
-let cache: { at: number; projects: Project[] } | null = null
+let cache: { at: number; key: string; projects: Project[] } | null = null
 
-export async function discoverProjects(roots: string[], force = false): Promise<Project[]> {
-  if (!force && cache && Date.now() - cache.at < 60_000) return cache.projects
-  const paths = [...new Set(roots.flatMap((r) => findRepos(r, 3)))]
+/**
+ * Git repos under the roots, named by folder unless a vault project note links
+ * the path to a friendlier name. Linked paths outside the roots are included too.
+ */
+export async function discoverProjects(roots: string[], force = false, links: { title: string; path: string }[] = []): Promise<Project[]> {
+  const key = JSON.stringify([roots, links])
+  if (!force && cache && cache.key === key && Date.now() - cache.at < 60_000) return cache.projects
+  const named = new Map(links.filter((l) => existsSync(l.path)).map((l) => [l.path, l.title]))
+  const paths = [...new Set([...roots.flatMap((r) => findRepos(r, 3)), ...named.keys()])]
   const projects = await Promise.all(
     paths.map(async (path): Promise<Project> => {
       const [log, status, remote, branch] = await Promise.all([
@@ -53,7 +59,7 @@ export async function discoverProjects(roots: string[], force = false): Promise<
         run('git', ['branch', '--show-current'], { cwd: path })
       ])
       const [at, subject] = log.stdout.trim().split('\x1f')
-      const name = titleCase(basename(path))
+      const name = named.get(path) ?? titleCase(basename(path))
       return {
         name,
         slug: slugify(name),
@@ -66,6 +72,6 @@ export async function discoverProjects(roots: string[], force = false): Promise<
     })
   )
   projects.sort((a, b) => (b.lastCommit?.at ?? 0) - (a.lastCommit?.at ?? 0))
-  cache = { at: Date.now(), projects }
+  cache = { at: Date.now(), key, projects }
   return projects
 }

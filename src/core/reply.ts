@@ -9,7 +9,7 @@ export interface ProposedAction {
 }
 
 export interface MemoryWrite {
-  kind: 'preference' | 'decision' | 'idea' | 'fact' | 'project'
+  kind: 'preference' | 'decision' | 'idea' | 'fact' | 'project' | 'goal' | 'person'
   title: string
   text: string
   project?: string

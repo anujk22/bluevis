@@ -1,4 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { parseClaudeLine, parseCodexLine, parseOpenAISSELine, LineBuffer } from '../core/parsers'
 import type { AgentEvent, ModelChoice, ProviderHealth } from '../core/types'
 import { run, spawnLines } from './shell'
@@ -16,6 +19,8 @@ export interface RunOptions {
   /** Prior turns, used only by the stateless local provider. */
   history?: { role: 'user' | 'assistant'; content: string }[]
   localBaseUrl?: string
+  /** JSON Schema for the final reply. Codex enforces it; other providers are asked for JSON. */
+  schema?: object
   onEvent: (e: AgentEvent) => void
 }
 
@@ -85,6 +90,11 @@ function runCodex(o: RunOptions): RunHandle {
   for (const img of o.images ?? []) args.push('-i', img)
   args.push('-m', o.choice.model)
   if (o.choice.effort) args.push('-c', `model_reasoning_effort="${o.choice.effort}"`)
+  if (o.schema) {
+    const file = join(tmpdir(), `bluevis-schema-${process.pid}-${Date.now()}.json`)
+    writeFileSync(file, JSON.stringify(o.schema))
+    args.push('--output-schema', file)
+  }
   if (o.sessionId) args.push('-c', `sandbox_mode="${sandbox}"`)
   else args.push('-s', sandbox, '-C', o.cwd)
   args.push('-')

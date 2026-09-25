@@ -63,7 +63,7 @@ export class Brain {
   }
 
   private async projects(): Promise<Project[]> {
-    return discoverProjects(getSettings().projectRoots)
+    return discoverProjects(getSettings().projectRoots, false, this.vault.projectLinks())
   }
 
   context() {

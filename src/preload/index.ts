@@ -21,6 +21,15 @@ const api = {
   providers: { health: invoke('providers:health') },
   voice: { start: invoke('voice:start'), stop: invoke('voice:stop'), health: invoke('voice:health'), stt: invoke('voice:stt'), tts: invoke('voice:tts') },
   window: { setMode: invoke('window:mode'), getMode: invoke('window:get-mode'), hide: invoke('window:hide') },
+  importer: {
+    state: invoke('import:state'),
+    proposals: invoke('import:proposals'),
+    chatgpt: invoke('import:chatgpt'),
+    text: invoke('import:text'),
+    accept: invoke('import:accept'),
+    reject: invoke('import:reject'),
+    stop: invoke('import:stop')
+  },
   screen: { capture: invoke('screen:capture'), discard: invoke('screen:discard') },
   on(channel: string, cb: (...args: unknown[]) => void) {
     const listener = (_e: unknown, ...args: unknown[]) => cb(...args)
