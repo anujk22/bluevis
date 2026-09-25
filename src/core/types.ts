@@ -170,6 +170,8 @@ export interface Settings {
   calendarFeeds?: { name: string; url: string }[]
   /** App accent color; everything tinted follows it, neutrals stay graphite. */
   accent?: Accent
+  /** Canvas base URL; the access token lives in the keychain. */
+  canvasUrl?: string
 }
 
 export interface ProviderHealth {

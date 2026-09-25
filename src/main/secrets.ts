@@ -2,18 +2,22 @@ import { app, safeStorage } from 'electron'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// The Gemini API key, encrypted with the macOS keychain. Never written to settings.json.
-const file = () => join(app.getPath('userData'), 'gemini.key')
+// API keys and tokens, encrypted with the macOS keychain. Never written to settings.json.
+export type SecretName = 'gemini' | 'canvas'
 
-export function geminiKey(): string | null {
+const file = (name: SecretName) => join(app.getPath('userData'), `${name}.key`)
+
+export function getSecret(name: SecretName): string | null {
   try {
-    return safeStorage.decryptString(readFileSync(file()))
+    return safeStorage.decryptString(readFileSync(file(name)))
   } catch {
     return null
   }
 }
 
-export function setGeminiKey(key: string | null) {
-  if (key) writeFileSync(file(), safeStorage.encryptString(key))
-  else rmSync(file(), { force: true })
+export function setSecret(name: SecretName, value: string | null) {
+  if (value) writeFileSync(file(name), safeStorage.encryptString(value))
+  else rmSync(file(name), { force: true })
 }
+
+export const geminiKey = () => getSecret('gemini')

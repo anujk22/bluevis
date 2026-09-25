@@ -9,7 +9,8 @@ import { discoverProjects } from './projects'
 import { HistoryService } from './history'
 import { onRateLimits, providerHealth } from './providers'
 import { UsageService } from './usage'
-import { setGeminiKey } from './secrets'
+import { getSecret, setSecret } from './secrets'
+import { DEFAULT_CANVAS, verifyCanvas } from './canvas'
 import { getSettings, updateSettings } from './settings'
 import { adoptLoginShellPath, run } from './shell'
 import { TaskManager } from './tasks'
@@ -230,18 +231,34 @@ app.whenReady().then(async () => {
     return s
   })
   ipcMain.handle('providers:health', () => providerHealth(getSettings().localBaseUrl))
+  ipcMain.handle('canvas:set-token', async (_e, raw: string, url?: string) => {
+    const token = raw.trim()
+    if (url) updateSettings({ canvasUrl: url.trim().replace(/\/$/, '') })
+    if (!token) {
+      setSecret('canvas', null)
+      return { ok: true }
+    }
+    try {
+      const name = await verifyCanvas(token, getSettings().canvasUrl ?? DEFAULT_CANVAS)
+      setSecret('canvas', token)
+      return { ok: true, name }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+  ipcMain.handle('secrets:has', (_e, name: 'gemini' | 'canvas') => !!getSecret(name))
   // Check the key against the model before keeping it; a working key makes Gemini Flash the conversation model.
   ipcMain.handle('gemini:set-key', async (_e, raw: string) => {
     const key = raw.trim()
     if (!key) {
-      setGeminiKey(null)
+      setSecret('gemini', null)
       return { ok: true }
     }
     const model = 'gemini-3.8-flash'
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}`, { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(10000) }).catch((e: Error) => e)
     if (res instanceof Error) return { ok: false, error: `Could not reach Google (${res.message})` }
     if (!res.ok) return { ok: false, error: ((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error?.message ?? `Google returned ${res.status}` }
-    setGeminiKey(key)
+    setSecret('gemini', key)
     const s = updateSettings({ brain: { provider: 'gemini', model, effort: 'low' } })
     send('settings', s)
     send('context', { ...brain.context(), brainLabel: label(s.brain) })

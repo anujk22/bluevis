@@ -8,6 +8,7 @@ import type { RelayRun } from '../core/relay'
 import type { AgentTask, ModelChoice, Project, Settings, Turn, TurnAction } from '../core/types'
 import { PERSONA, RESUME_PROMPT, SESSION_PROMPT } from './persona'
 import { agendaText } from './calendar'
+import { canvasBrief } from './canvas'
 import { discoverProjects } from './projects'
 import { runProvider, localModels, type RunHandle } from './providers'
 import { getSettings, updateSettings } from './settings'
@@ -161,8 +162,11 @@ export class Brain {
         return
       case 'mail':
         return this.mail(intent.text)
-      case 'agenda':
-        return this.chat(intent.text, undefined, `<calendar source="your ICS feeds, fetched just now">\n${await agendaText()}\n</calendar>`)
+      case 'agenda': {
+        const [cal, canvas] = await Promise.all([agendaText(), canvasBrief()])
+        const ctx = `<calendar source="your ICS feeds, fetched just now">\n${cal}\n</calendar>${canvas ? `\n\n<canvas source="Canvas API, fetched just now">\n${canvas}\n</canvas>` : ''}`
+        return this.chat(intent.text, undefined, ctx)
+      }
       case 'relay': {
         const run = this.relays.start(intent.url, intent.note)
         return this.say('Relay started. Opus ideates, Astra challenges, then Opus consolidates. You can watch every step.', { relayId: run.id })

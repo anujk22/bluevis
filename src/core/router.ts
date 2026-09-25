@@ -110,7 +110,7 @@ export function route(raw: string, projects: string[] = []): Intent {
     return { type: 'mail', text }
   }
 
-  if (/\b(calendar|schedule|agenda|what'?s (on|coming up|today|tomorrow)|due (today|tomorrow|this week|soon)|deadlines?|assignments?|homework|canvas|class(es)? (today|tomorrow)|free (today|tomorrow|this))\b/i.test(text) && !/^(remember|note|save)\b/i.test(lower)) {
+  if (/\b(calendar|schedule|agenda|what'?s (on|coming up|today|tomorrow)|due (today|tomorrow|this week|soon)|deadlines?|assignments?|homework|canvas|grades?|announcements?|submitted|quiz(?:zes)?|missing work|class(es)? (today|tomorrow)|free (today|tomorrow|this))\b/i.test(text) && !/^(remember|note|save)\b/i.test(lower)) {
     return { type: 'agenda', text }
   }
 

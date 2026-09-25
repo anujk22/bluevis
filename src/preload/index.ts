@@ -15,6 +15,8 @@ const api = {
   },
   actions: { approve: invoke('action:approve'), dismiss: invoke('action:dismiss') },
   tasks: { list: invoke('tasks:list'), start: invoke('tasks:start'), stop: invoke('tasks:stop') },
+  canvas: { setToken: invoke('canvas:set-token') },
+  secrets: { has: invoke('secrets:has') },
   history: { list: invoke('history:list'), read: invoke('history:read'), continue: invoke('history:continue') },
   projects: { list: invoke('projects:list'), activate: invoke('project:activate'), reveal: invoke('project:reveal') },
   memory: { atlas: invoke('memory:atlas'), read: invoke('memory:read'), open: invoke('memory:open'), undo: invoke('memory:undo'), revert: invoke('memory:revert'), search: invoke('memory:search') },

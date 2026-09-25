@@ -234,37 +234,74 @@ function AccentPicker({ value, onChange }: { value: Accent; onChange: (a: Accent
   )
 }
 
-/** Gemini runs through an AI Studio API key, stored encrypted in the keychain; the key never comes back to the page. */
-function GeminiKey({ saved, onSaved }: { saved: boolean; onSaved: () => void }) {
-  const [key, setKey] = useState('')
+type SaveResult = { ok: boolean; error?: string; name?: string }
+
+/** Keys and tokens are checked, then stored encrypted in the keychain; they never come back to the page. */
+function SecretField({ label, saved, placeholder, save, onSaved }: { label: string; saved: boolean; placeholder: string; save: (v: string) => Promise<SaveResult>; onSaved: (r: SaveResult) => void }) {
+  const [value, setValue] = useState('')
   const [state, setState] = useState<{ busy?: boolean; error?: string }>({})
   const submit = async () => {
     setState({ busy: true })
-    const r = (await window.bluevis.providers.setGeminiKey(key)) as { ok: boolean; error?: string }
+    const r = await save(value)
     setState(r.ok ? {} : { error: r.error })
     if (r.ok) {
-      setKey('')
-      onSaved()
+      setValue('')
+      onSaved(r)
     }
   }
   return (
     <div className="field">
-      <label>Gemini API key</label>
+      <label>{label}</label>
       <div className="ctrl" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input
           className="input mono"
           type="password"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && key.trim() && void submit()}
-          placeholder={saved ? 'Saved. Paste a new key to replace it' : 'Paste a key from aistudio.google.com'}
-          aria-label="Gemini API key"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && value.trim() && void submit()}
+          placeholder={saved ? 'Saved. Paste a new one to replace it' : placeholder}
+          aria-label={label}
         />
-        <button className="btn" disabled={!key.trim() || state.busy} onClick={submit}>
-          {state.busy ? 'Checking…' : 'Save key'}
+        <button className="btn" disabled={!value.trim() || state.busy} onClick={submit}>
+          {state.busy ? 'Checking…' : 'Save'}
         </button>
         {state.error && <div className="d" style={{ color: 'var(--amber)', width: '100%', fontSize: 12.5 }}>{state.error}</div>}
       </div>
+    </div>
+  )
+}
+
+function Canvas({ settings, save }: { settings: Settings; save: (p: Partial<Settings>) => Promise<void> }) {
+  const api = window.bluevis
+  const [saved, setSaved] = useState(false)
+  const [who, setWho] = useState<string | null>(null)
+  useEffect(() => {
+    void api.secrets.has('canvas').then((h) => setSaved(h as boolean))
+  }, [api])
+  return (
+    <div>
+      <div className="field">
+        <label>Canvas address</label>
+        <div className="ctrl">
+          <input
+            className="input mono"
+            defaultValue={settings.canvasUrl ?? 'https://rutgers.instructure.com'}
+            onBlur={(e) => e.target.value.trim() !== settings.canvasUrl && save({ canvasUrl: e.target.value.trim().replace(/\/$/, '') })}
+            aria-label="Canvas address"
+          />
+        </div>
+      </div>
+      <SecretField
+        label="Access token"
+        saved={saved}
+        placeholder="Canvas: Account, Settings, New Access Token"
+        save={async (v) => (await api.canvas.setToken(v)) as SaveResult}
+        onSaved={(r) => {
+          setSaved(true)
+          setWho(r.name ?? null)
+        }}
+      />
+      {who && <p style={{ color: 'var(--mist)', fontSize: 12.5, margin: '4px 0 0' }}>Connected as {who}.</p>}
     </div>
   )
 }
@@ -320,7 +357,13 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
               <input className="input mono" defaultValue={settings.localBaseUrl} onBlur={(e) => e.target.value !== settings.localBaseUrl && save({ localBaseUrl: e.target.value })} aria-label="Local model server URL" />
             </div>
           </div>
-          <GeminiKey saved={!!health?.find((h) => h.provider === 'gemini' && h.ok)} onSaved={() => void api.providers.health().then((h) => setHealth(h as ProviderHealth[]))} />
+          <SecretField
+            label="Gemini API key"
+            saved={!!health?.find((h) => h.provider === 'gemini' && h.ok)}
+            placeholder="Paste a key from aistudio.google.com"
+            save={async (v) => (await api.providers.setGeminiKey(v)) as SaveResult}
+            onSaved={() => void api.providers.health().then((h) => setHealth(h as ProviderHealth[]))}
+          />
           <div className="health" style={{ marginTop: 14 }}>
             {(health ?? []).map((h) => (
               <div key={h.provider}>
@@ -385,6 +428,12 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
             Read-only feeds. Google Calendar: Settings → your calendar → Integrate calendar → Secret address in iCal format. Canvas: Calendar → Calendar feed. Then ask “what's due this week?”
           </p>
           <Calendars settings={settings} save={save} />
+        </div>
+
+        <div className="section">
+          <h3>Canvas</h3>
+          <p>Assignments with whether you submitted them, grades and announcements. Read-only; the token stays in your keychain.</p>
+          <Canvas settings={settings} save={save} />
         </div>
 
         <div className="section">
