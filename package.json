@@ -53,6 +53,13 @@
       {
         "from": "vault-template",
         "to": "vault-template"
+      },
+      {
+        "from": "resources",
+        "to": ".",
+        "filter": [
+          "trayTemplate*.png"
+        ]
       }
     ],
     "mac": {
@@ -64,7 +71,8 @@
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Bluevis listens when you hold the talk key.",
         "NSScreenCaptureUsageDescription": "Bluevis looks at your screen only when you ask it to."
-      }
+      },
+      "icon": "resources/icon.icns"
     }
   }
 }

@@ -91,6 +91,7 @@ export interface Turn {
   taskId?: string
   /** Vault passages the model was given for this reply. */
   sources?: SourceRef[]
+  relayId?: string
 }
 
 export interface TurnAction {

@@ -4,12 +4,14 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseReply, type MemoryWrite } from '../core/reply'
 import { matchProject, route, type Intent } from '../core/router'
+import type { RelayRun } from '../core/relay'
 import type { AgentTask, ModelChoice, Project, Settings, Turn, TurnAction } from '../core/types'
 import { PERSONA, RESUME_PROMPT, SESSION_PROMPT } from './persona'
 import { discoverProjects } from './projects'
 import { runProvider, localModels, type RunHandle } from './providers'
 import { getSettings, updateSettings } from './settings'
 import { run } from './shell'
+import type { RelayManager } from './relay'
 import type { TaskManager } from './tasks'
 import type { Vault } from './vault'
 
@@ -36,6 +38,7 @@ export class Brain {
   private current: RunHandle | null = null
   private activeProject?: Project
   private workspace = join(app.getPath('userData'), 'workspace')
+  relays!: RelayManager
 
   constructor(
     private vault: Vault,
@@ -141,6 +144,10 @@ export class Brain {
       case 'new-conversation':
         this.reset()
         return
+      case 'relay': {
+        const run = this.relays.start(intent.url, intent.note)
+        return this.say('Relay started. Opus ideates, Astra challenges, then Opus consolidates. You can watch every step.', { relayId: run.id })
+      }
     }
   }
 
@@ -324,6 +331,17 @@ Constraints:
     const files = t.filesChanged.length ? ` It changed ${t.filesChanged.length} file${t.filesChanged.length > 1 ? 's' : ''}.` : ''
     this.say(`${label(t.choice)} ${what}${t.project ? ` on ${t.project}` : ''}.${files}`, { taskId: t.id, evidence: t.status === 'completed-verified' ? 'observed' : 'reported' })
     void this.vault.writeAgentRun(t)
+  }
+
+  onRelayFinished(r: RelayRun) {
+    if (r.status !== 'done') {
+      this.say(`The ${r.title} relay ${r.status === 'stopped' ? 'was stopped' : 'failed'}. Completed stages are kept.`, { relayId: r.id, error: r.status === 'failed' })
+      return
+    }
+    const plan = r.stages.at(-1)!.text
+    const verdict = plan.split(/##\s*Verdict/i)[1]?.split(/\n##\s/)[0]?.trim()
+    const spoken = verdict ? verdict.split(/(?<=[.!?])\s/).slice(0, 2).join(' ') : 'The plan is ready.'
+    this.say(`The ${r.title} relay is done. ${spoken}\n\nSaved to \`${r.outputPath}\`.`, { relayId: r.id, spoken: `The ${r.title} relay is done. ${spoken}` })
   }
 
   private async open(p: Project) {

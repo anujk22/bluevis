@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, session, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, session, shell, systemPreferences, Tray } from 'electron'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Settings } from '../core/types'
 import { Brain, label } from './brain'
 import { Importer } from './importer'
+import { RelayManager } from './relay'
 import { discoverProjects } from './projects'
 import { providerHealth } from './providers'
 import { getSettings, updateSettings } from './settings'
@@ -19,7 +20,11 @@ if (process.env.BLUEVIS_PROFILE_DIR) app.setPath('userData', process.env.BLUEVIS
 
 let win: BrowserWindow | null = null
 let mode: Mode = 'expanded'
-const send = (channel: string, ...args: unknown[]) => win?.webContents.send(channel, ...args)
+let tray: Tray | null = null
+// Events can fire during quit, after the window is gone; drop them instead of throwing.
+const send = (channel: string, ...args: unknown[]) => {
+  if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(channel, ...args)
+}
 
 function boundsFor(m: Mode) {
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
@@ -83,6 +88,27 @@ async function captureScreen(): Promise<{ path: string; preview: string } | { er
   return { path, preview }
 }
 
+/** Menu bar presence: always there, so Bluevis can be found, summoned and quit. */
+function createTray(openVault: () => void) {
+  const icon = nativeImage.createFromPath(join(app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'), 'trayTemplate.png'))
+  icon.setTemplateImage(true)
+  tray = new Tray(icon)
+  tray.setToolTip('Bluevis')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Show Bluevis', accelerator: 'Alt+Space', click: () => setMode('expanded') },
+      { label: 'Talk', accelerator: 'Alt+Shift+Space', click: () => (setMode('expanded'), send('hotkey:talk')) },
+      { label: 'Shrink to orb', click: () => setMode('compact', false) },
+      { label: 'Hide', click: () => win?.hide() },
+      { type: 'separator' },
+      { label: 'Open vault', click: openVault },
+      { label: 'Launch at login', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, enabled: app.isPackaged, click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }) },
+      { type: 'separator' },
+      { label: 'Quit Bluevis', accelerator: 'Cmd+Q', click: () => app.quit() }
+    ])
+  )
+}
+
 app.whenReady().then(async () => {
   await adoptLoginShellPath()
   const settings = getSettings()
@@ -92,7 +118,7 @@ app.whenReady().then(async () => {
   const voice = new VoiceService((h) => {
     send('voice:health', h)
     if (h.state === 'ready') void vault.refreshEmbeddings()
-  })
+  }, () => getSettings().voice.ttsVoice)
   vault.embedder = (texts, query) => voice.embed(texts, query)
   let brain: Brain
   const tasks = new TaskManager(
@@ -131,6 +157,16 @@ app.whenReady().then(async () => {
   ipcMain.handle('import:accept', (_e, key: string, edited?: { title?: string; text?: string }) => importer.accept(key, edited))
   ipcMain.handle('import:reject', (_e, key: string) => importer.reject(key))
   ipcMain.handle('import:stop', () => importer.stop())
+
+  const relays = new RelayManager(
+    vault,
+    (r) => send('relay', r),
+    (r) => brain.onRelayFinished(r)
+  )
+  brain.relays = relays
+  ipcMain.handle('relays:list', () => relays.list())
+  ipcMain.handle('relays:start', (_e, url: string, note?: string) => relays.start(url, note))
+  ipcMain.handle('relays:stop', (_e, id: string) => relays.stop(id))
 
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'))
 
@@ -175,7 +211,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('voice:stop', () => voice.stop())
   ipcMain.handle('voice:health', () => voice.health)
   ipcMain.handle('voice:stt', (_e, wav: ArrayBuffer) => voice.transcribe(wav))
-  ipcMain.handle('voice:tts', (_e, text: string) => voice.speak(text, getSettings().voice.ttsVoice, getSettings().voice.speed))
+  ipcMain.handle('voice:tts', (_e, text: string, override?: string) => voice.speak(text, override ?? getSettings().voice.ttsVoice, getSettings().voice.speed))
   ipcMain.handle('window:mode', (_e, m: Mode) => setMode(m))
   ipcMain.handle('window:get-mode', () => mode)
   ipcMain.handle('window:hide', () => win?.hide())
@@ -185,6 +221,7 @@ app.whenReady().then(async () => {
   })
 
   createWindow()
+  createTray(() => void shell.openPath(vault.root))
 
   // ⌥Space summons or tucks away Bluevis. ⌥⇧Space talks. ⌥⇧L looks at the screen, then asks.
   globalShortcut.register('Alt+Space', () => {
@@ -214,3 +251,5 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => app.quit())
+// Clicking the Dock icon brings Bluevis back if it was hidden.
+app.on('activate', () => setMode('expanded'))

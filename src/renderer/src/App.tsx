@@ -7,8 +7,10 @@ import { Talk } from './views/Talk'
 import { Agents } from './views/Agents'
 import { Memory } from './views/Memory'
 import { SettingsView } from './views/Settings'
+import { Relays } from './views/Relays'
+import type { RelayRun } from '../../core/relay'
 
-export type View = 'talk' | 'agents' | 'memory' | 'settings'
+export type View = 'talk' | 'agents' | 'relays' | 'memory' | 'settings'
 export interface Ctx {
   activeProject?: string
   brain?: ModelChoice
@@ -36,6 +38,8 @@ export function App() {
   const [shot, setShot] = useState<Shot | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [focusTask, setFocusTask] = useState<string | null>(null)
+  const [relays, setRelays] = useState<Record<string, RelayRun>>({})
+  const [focusRelay, setFocusRelay] = useState<string | null>(null)
 
   const listener = useRef<Listener | null>(null)
   const speaker = useMemo(() => new Speaker((text) => api.voice.tts(text) as Promise<ArrayBuffer>), [api])
@@ -47,6 +51,7 @@ export function App() {
     void api.chat.turns().then((t) => setTurns(t as Turn[]))
     void api.tasks.list().then((l) => setTasks(Object.fromEntries((l as AgentTask[]).map((t) => [t.id, t]))))
     void api.chat.context().then((c) => setCtx(c as Ctx))
+    void api.relays.list().then((l) => setRelays(Object.fromEntries((l as RelayRun[]).map((r) => [r.id, r]))))
     void api.settings.get().then((s) => setSettings(s as Settings))
     void api.voice.health().then((h) => setVoice(h as VoiceHealth))
     void api.window.getMode().then((m) => setWinMode(m as 'compact' | 'expanded'))
@@ -62,6 +67,7 @@ export function App() {
         })
       ),
       api.on('reset', () => setTurns([])),
+      api.on('relay', (r) => setRelays((prev) => ({ ...prev, [(r as RelayRun).id]: r as RelayRun }))),
       api.on('busy', (b) => setBusy(b as boolean)),
       api.on('task', (t) => setTasks((prev) => ({ ...prev, [(t as AgentTask).id]: t as AgentTask }))),
       api.on('context', (c) => setCtx(c as Ctx)),
@@ -128,7 +134,11 @@ export function App() {
   }, [api, speaker])
 
   const taskList = useMemo(() => Object.values(tasks).sort((a, b) => b.startedAt - a.startedAt), [tasks])
+  const relayList = useMemo(() => Object.values(relays).sort((a, b) => b.startedAt - a.startedAt), [relays])
+  const relaysRunning = relayList.filter((r) => r.status === 'running').length
+  // Satellites count every live worker: agents and relays.
   const running = taskList.filter((t) => ACTIVE.has(t.status))
+  const workers = running.length + relaysRunning
   const lastBluevis = [...turns].reverse().find((t) => t.speaker === 'bluevis')
   const pendingProposal = turns.some((t) => t.action?.state === 'proposed')
   const [errorFresh, setErrorFresh] = useState(false)
@@ -149,7 +159,7 @@ export function App() {
           ? 'error'
           : pendingProposal
             ? 'approval'
-            : running.length
+            : workers
               ? 'acting'
               : 'idle'
 
@@ -164,9 +174,9 @@ export function App() {
     return (
       <div className="compact">
         <button className="stage-orb" onClick={() => api.window.setMode('expanded')} aria-label="Open Bluevis">
-          <Orb mode={orbMode} level={level} moons={Math.min(running.length, 4)} size={176} radius={0.6} />
+          <Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={176} radius={0.6} />
         </button>
-        {orbMode !== 'idle' && <span className="compact-dot mono">{caption(orbMode, running.length)}</span>}
+        {orbMode !== 'idle' && <span className="compact-dot mono">{caption(orbMode, workers)}</span>}
       </div>
     )
   }
@@ -179,10 +189,11 @@ export function App() {
           bluevis<i />
         </div>
         <nav className="nav" aria-label="Sections">
-          {(['talk', 'agents', 'memory'] as const).map((v) => (
+          {(['talk', 'agents', 'relays', 'memory'] as const).map((v) => (
             <button key={v} aria-current={view === v ? 'page' : undefined} onClick={() => setView(v)}>
-              {v === 'talk' ? 'Talk' : v === 'agents' ? 'Agents' : 'Memory'}
+              {v === 'talk' ? 'Talk' : v === 'agents' ? 'Agents' : v === 'relays' ? 'Relays' : 'Memory'}
               {v === 'agents' && running.length > 0 && <span className="count">{running.length}</span>}
+              {v === 'relays' && relaysRunning > 0 && <span className="count">{relaysRunning}</span>}
             </button>
           ))}
         </nav>
@@ -213,8 +224,8 @@ export function App() {
             turns={turns}
             tasks={tasks}
             busy={busy}
-            orb={<Orb mode={orbMode} level={level} moons={Math.min(running.length, 4)} size={empty ? 460 : 440} radius={empty ? 0.5 : 0.56} className="stage-orb" />}
-            caption={caption(orbMode, running.length, ctx.brainLabel)}
+            orb={<Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={empty ? 460 : 440} radius={empty ? 0.5 : 0.56} className="stage-orb" />}
+            caption={caption(orbMode, workers, ctx.brainLabel)}
             live={orbMode !== 'idle'}
             listening={listening}
             shot={shot}
@@ -237,9 +248,15 @@ export function App() {
               void api.chat.stop()
             }}
             onOpenTask={openTask}
+            relays={relays}
+            onOpenRelay={(id) => {
+              setFocusRelay(id)
+              setView('relays')
+            }}
           />
         )}
         {view === 'agents' && <Agents tasks={taskList} focus={focusTask} onFocus={setFocusTask} settings={settings} />}
+        {view === 'relays' && <Relays runs={relayList} focus={focusRelay} onFocus={setFocusRelay} />}
         {view === 'memory' && <Memory />}
         {view === 'settings' && settings && <SettingsView settings={settings} voice={voice} onChange={setSettings} />}
       </main>
@@ -260,7 +277,7 @@ function caption(mode: OrbMode, running: number, model?: string): string {
     case 'error':
       return 'Something failed'
     case 'acting':
-      return `${running} agent${running > 1 ? 's' : ''} working`
+      return `${running} worker${running > 1 ? 's' : ''} running`
     default:
       return ''
   }

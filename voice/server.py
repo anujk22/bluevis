@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11,<3.13"
-# dependencies = ["mlx-audio>=0.2", "misaki[en]", "mlx-whisper", "soundfile", "numpy", "fastembed"]
+# dependencies = ["mlx-audio>=0.2", "misaki[en]", "mlx-whisper", "soundfile", "numpy", "fastembed", "pocket-tts"]
 # ///
 """Bluevis local sidecar.
 
@@ -26,11 +26,13 @@ TTS_MODEL = os.environ.get("BLUEVIS_TTS_MODEL", "mlx-community/Kokoro-82M-bf16")
 EMBED_MODEL = os.environ.get("BLUEVIS_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 SAMPLE_RATE = 24000
 # Bump when endpoints change so the app replaces an older running sidecar.
-VERSION = 2
+VERSION = 3
 
 # MLX is not thread-safe; serialize all model work.
 lock = threading.Lock()
-state = {"tts": None, "stt_ready": False, "embed": None}
+state = {"tts": None, "stt_ready": False, "embed": None, "pocket": None, "pocket_voices": {}}
+# Pocket TTS runs on CPU (PyTorch), separately from MLX.
+pocket_lock = threading.Lock()
 # Embeddings run on CPU (onnxruntime), so they do not contend with MLX for the lock.
 embed_lock = threading.Lock()
 
@@ -71,7 +73,27 @@ def transcribe(path):
     return result["text"].strip()
 
 
+def synthesize_pocket(text, voice):
+    if state["pocket"] is None:
+        from pocket_tts import TTSModel
+
+        t = time.time()
+        state["pocket"] = TTSModel.load_model()
+        log(f"pocket tts loaded in {time.time() - t:.1f}s")
+    model = state["pocket"]
+    if voice not in state["pocket_voices"]:
+        state["pocket_voices"][voice] = model.get_state_for_audio_prompt(voice)
+    audio = model.generate_audio(state["pocket_voices"][voice], text).numpy()
+    buf = io.BytesIO()
+    sf.write(buf, audio, model.sample_rate, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
+
+
 def synthesize(text, voice, speed):
+    """Voices are "pocket:<name>" (Kyutai Pocket TTS) or a Kokoro voice id like "bm_george"."""
+    if voice.startswith("pocket:"):
+        with pocket_lock:
+            return synthesize_pocket(text, voice.split(":", 1)[1])
     model = get_tts()
     lang = "b" if voice.startswith("b") else "a"
     chunks = [np.array(r.audio) for r in model.generate(text=text, voice=voice, speed=speed, lang_code=lang)]
@@ -114,8 +136,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, {"text": text})
             if self.path == "/tts":
                 req = json.loads(self.body() or b"{}")
-                with lock:
-                    wav = synthesize(req.get("text", ""), req.get("voice", "bm_george"), float(req.get("speed", 1.0)))
+                voice = req.get("voice", "bm_george")
+                if voice.startswith("pocket:"):
+                    wav = synthesize(req.get("text", ""), voice, 1.0)
+                else:
+                    with lock:
+                        wav = synthesize(req.get("text", ""), voice, float(req.get("speed", 1.0)))
                 return self.reply(200, wav, "audio/wav")
             if self.path == "/shutdown":
                 self.reply(200, {"ok": True})
@@ -127,6 +153,9 @@ class Handler(BaseHTTPRequestHandler):
                     vectors = embed(req.get("texts", []), bool(req.get("query")))
                 return self.reply(200, {"model": EMBED_MODEL, "vectors": vectors})
             if self.path == "/warm":
+                voice = json.loads(self.body() or b"{}").get("voice", "bm_george")
+                if voice.startswith("pocket:"):
+                    synthesize("Ready.", voice, 1.0)
                 with lock:
                     get_tts()
                     synthesize("Ready.", "bm_george", 1.0)

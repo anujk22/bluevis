@@ -152,6 +152,15 @@ describe('router', () => {
     expect(route('cancel codex', projects)).toEqual({ type: 'stop-task', agent: 'codex' })
   })
 
+  it('starts a relay for Devpost links and keeps the rest as a note', () => {
+    expect(route('brainstorm https://hacknyu-2025.devpost.com/ we want fintech', projects)).toEqual({
+      type: 'relay',
+      url: 'https://hacknyu-2025.devpost.com/',
+      note: 'we want fintech'
+    })
+    expect(route('https://treehacks-2025.devpost.com/rules', projects)).toEqual({ type: 'relay', url: 'https://treehacks-2025.devpost.com/rules', note: undefined })
+  })
+
   it('opens only known projects, otherwise chats', () => {
     expect(route('open yonder', projects)).toEqual({ type: 'open', target: 'Yonder' })
     expect(route('open the pod bay doors', projects)).toMatchObject({ type: 'chat' })

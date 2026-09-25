@@ -6,7 +6,7 @@ import type { VoiceHealth } from '../core/types'
 const PORT = 47821
 const BASE = `http://127.0.0.1:${PORT}`
 /** Must match VERSION in voice/server.py. */
-const SIDECAR_VERSION = 2
+const SIDECAR_VERSION = 3
 
 /** Manages the local Python voice sidecar (Whisper STT + Kokoro TTS on MLX). */
 export class VoiceService {
@@ -14,7 +14,10 @@ export class VoiceService {
   private starting: Promise<void> | null = null
   health: VoiceHealth = { state: 'off', detail: 'Voice is off' }
 
-  constructor(private onHealth: (h: VoiceHealth) => void) {}
+  constructor(
+    private onHealth: (h: VoiceHealth) => void,
+    private voice: () => string
+  ) {}
 
   private set(h: VoiceHealth) {
     this.health = h
@@ -65,7 +68,7 @@ export class VoiceService {
       }
       if (!(await this.alive())) return
       this.set({ state: 'starting', detail: 'Loading voice models' })
-      const warm = await fetch(`${BASE}/warm`, { method: 'POST' }).catch(() => null)
+      const warm = await fetch(`${BASE}/warm`, { method: 'POST', body: JSON.stringify({ voice: this.voice() }), headers: { 'Content-Type': 'application/json' } }).catch(() => null)
       if (warm?.ok) this.set({ state: 'ready', detail: 'Local voice ready' })
       else this.set({ state: 'error', detail: 'Voice models failed to load' })
     })()

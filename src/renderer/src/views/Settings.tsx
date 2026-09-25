@@ -1,18 +1,93 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ModelChoice, ProviderHealth, Settings, VoiceHealth } from '../../../core/types'
 
 const CODEX_MODELS = ['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra', 'gpt-5.6-luna']
 const CLAUDE_MODELS = ['haiku', 'sonnet', 'opus']
-const VOICES: [string, string][] = [
-  ['bm_george', 'George (British)'],
-  ['bm_lewis', 'Lewis (British)'],
-  ['bm_daniel', 'Daniel (British)'],
-  ['bm_fable', 'Fable (British)'],
-  ['bf_emma', 'Emma (British)'],
-  ['bf_isabella', 'Isabella (British)'],
-  ['am_michael', 'Michael (American)'],
-  ['af_heart', 'Heart (American)']
+interface VoiceOption {
+  id: string
+  name: string
+  kind: string
+}
+
+// Pocket TTS (Kyutai) sounds more natural; Kokoro is the fastest. Both run locally.
+const VOICES: { engine: string; blurb: string; voices: VoiceOption[] }[] = [
+  {
+    engine: 'Pocket TTS',
+    blurb: 'Natural, streams in about 0.2s, CPU',
+    voices: [
+      { id: 'pocket:charles', name: 'Charles', kind: 'male' },
+      { id: 'pocket:paul', name: 'Paul', kind: 'male' },
+      { id: 'pocket:george', name: 'George', kind: 'male' },
+      { id: 'pocket:stuart_bell', name: 'Stuart', kind: 'male, narrator' },
+      { id: 'pocket:peter_yearsley', name: 'Peter', kind: 'male, narrator' },
+      { id: 'pocket:javert', name: 'Javert', kind: 'male' },
+      { id: 'pocket:michael', name: 'Michael', kind: 'male' },
+      { id: 'pocket:alba', name: 'Alba', kind: 'female' },
+      { id: 'pocket:jane', name: 'Jane', kind: 'female' },
+      { id: 'pocket:eve', name: 'Eve', kind: 'female' }
+    ]
+  },
+  {
+    engine: 'Kokoro',
+    blurb: 'Fastest, more synthetic, MLX',
+    voices: [
+      { id: 'bm_george', name: 'George', kind: 'British male' },
+      { id: 'bm_fable', name: 'Fable', kind: 'British male' },
+      { id: 'bm_lewis', name: 'Lewis', kind: 'British male' },
+      { id: 'bf_emma', name: 'Emma', kind: 'British female' },
+      { id: 'af_heart', name: 'Heart', kind: 'American female' },
+      { id: 'am_michael', name: 'Michael', kind: 'American male' }
+    ]
+  }
 ]
+
+const PREVIEW = 'Good evening. Yonder is building cleanly again. Want me to have Codex take the next step?'
+
+function VoicePicker({ value, ready, onPick }: { value: string; ready: boolean; onPick: (id: string) => void }) {
+  const api = window.bluevis
+  const [playing, setPlaying] = useState<string | null>(null)
+  const [loading, setLoading] = useState<string | null>(null)
+  const audio = useRef<HTMLAudioElement | null>(null)
+  const preview = async (id: string) => {
+    audio.current?.pause()
+    if (playing === id) return setPlaying(null)
+    setLoading(id)
+    try {
+      const buf = (await api.voice.tts(PREVIEW, id)) as ArrayBuffer
+      const a = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })))
+      audio.current = a
+      a.onended = () => setPlaying(null)
+      setPlaying(id)
+      await a.play()
+    } finally {
+      setLoading(null)
+    }
+  }
+  return (
+    <div className="voice-picker">
+      {VOICES.map((group) => (
+        <div key={group.engine}>
+          <div className="eyebrow" style={{ margin: '14px 0 8px' }}>
+            {group.engine} · {group.blurb}
+          </div>
+          <div className="voice-grid">
+            {group.voices.map((v) => (
+              <div key={v.id} className="voice-card" aria-current={value === v.id}>
+                <button className="voice-pick" onClick={() => onPick(v.id)} aria-label={`Use ${v.name}`}>
+                  <span className="vname">{v.name}</span>
+                  <span className="mono vkind">{v.kind}</span>
+                </button>
+                <button className="voice-play" disabled={!ready || loading !== null} onClick={() => preview(v.id)} aria-label={`Preview ${v.name}`}>
+                  {loading === v.id ? <span className="spin" /> : playing === v.id ? '■' : '▶'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function ModelPicker({ value, onChange, localModels, allowLocal = true }: { value: ModelChoice; onChange: (c: ModelChoice) => void; localModels: string[]; allowLocal?: boolean }) {
   const models = value.provider === 'codex' ? CODEX_MODELS : value.provider === 'claude' ? CLAUDE_MODELS : localModels
@@ -135,15 +210,8 @@ export function SettingsView({ settings, voice, onChange }: { settings: Settings
             </div>
           </div>
           <div className="field">
-            <label>Voice</label>
+            <label>Speed (Kokoro)</label>
             <div className="ctrl">
-              <select className="select" value={settings.voice.ttsVoice} onChange={(e) => save({ voice: { ...settings.voice, ttsVoice: e.target.value } })} aria-label="Voice">
-                {VOICES.map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </select>
               <select className="select" value={String(settings.voice.speed)} onChange={(e) => save({ voice: { ...settings.voice, speed: Number(e.target.value) } })} aria-label="Speed">
                 {[0.9, 1, 1.05, 1.1, 1.2].map((s) => (
                   <option key={s} value={s}>
@@ -151,11 +219,9 @@ export function SettingsView({ settings, voice, onChange }: { settings: Settings
                   </option>
                 ))}
               </select>
-              <button className="btn" disabled={voice.state !== 'ready'} onClick={() => api.voice.tts('Good evening. Bluevis is online.').then((b) => new Audio(URL.createObjectURL(new Blob([b as ArrayBuffer], { type: 'audio/wav' }))).play())}>
-                Preview
-              </button>
             </div>
           </div>
+          <VoicePicker value={settings.voice.ttsVoice} ready={voice.state === 'ready'} onPick={(ttsVoice) => save({ voice: { ...settings.voice, ttsVoice } })} />
         </div>
 
         <div className="section">

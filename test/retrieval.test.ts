@@ -55,3 +55,21 @@ describe('fusion', () => {
     expect(cosine([1, 0], [])).toBe(0)
   })
 })
+
+import { devpostRoot, htmlToText, relayTitle } from '../src/core/relay'
+
+describe('relay page reading', () => {
+  it('turns server-rendered HTML into readable text', () => {
+    const t = htmlToText('<html><head><title>x</title></head><body><script>bad()</script><h1>HackNYU</h1><p>48-hour &amp; fun</p><ul><li>$11,000 grand</li></ul></body></html>')
+    expect(t).toContain('## HackNYU')
+    expect(t).toContain('48-hour & fun')
+    expect(t).toContain('- $11,000 grand')
+    expect(t).not.toContain('bad()')
+    expect(relayTitle(t, 'https://hacknyu-2025.devpost.com/')).toBe('HackNYU')
+  })
+
+  it('normalizes Devpost links', () => {
+    expect(devpostRoot('https://HackNYU-2025.devpost.com/rules?x=1')).toBe('https://hacknyu-2025.devpost.com')
+    expect(devpostRoot('https://example.com')).toBeNull()
+  })
+})

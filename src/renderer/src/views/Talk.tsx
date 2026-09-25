@@ -4,6 +4,8 @@ import type { Shot } from '../App'
 import { Arrow, Eye, Mic, Square } from '../components/icons'
 import { Inline, Markdown } from '../components/Markdown'
 import { TaskStatus } from '../components/TaskStatus'
+import { RelayInline } from './Relays'
+import type { RelayRun } from '../../../core/relay'
 
 interface Props {
   turns: Turn[]
@@ -22,6 +24,8 @@ interface Props {
   onShot: () => void
   onStop: () => void
   onOpenTask: (id: string) => void
+  relays: Record<string, RelayRun>
+  onOpenRelay: (id: string) => void
 }
 
 function greeting(): string {
@@ -37,7 +41,10 @@ export function Talk(p: Props) {
   const lastId = [...p.turns].reverse().find((t) => t.speaker === 'bluevis')?.id
   // A task's live card shows only on the most recent turn that refers to it.
   const cardTurn = new Map<string, string>()
-  for (const t of p.turns) if (t.taskId) cardTurn.set(t.taskId, t.id)
+  for (const t of p.turns) {
+    if (t.taskId) cardTurn.set(t.taskId, t.id)
+    if (t.relayId) cardTurn.set(t.relayId, t.id)
+  }
 
   useLayoutEffect(() => {
     const el = scroller.current
@@ -76,7 +83,7 @@ export function Talk(p: Props) {
       <section className="conversation" aria-label="Conversation">
         <div className="transcript" ref={scroller} role="log">
           {p.turns.map((t) => (
-            <TurnView key={t.id} turn={t} latest={t.id === lastId} task={t.taskId && cardTurn.get(t.taskId) === t.id ? p.tasks[t.taskId] : undefined} tasks={p.tasks} onOpenTask={p.onOpenTask} />
+            <TurnView key={t.id} turn={t} latest={t.id === lastId} task={t.taskId && cardTurn.get(t.taskId) === t.id ? p.tasks[t.taskId] : undefined} tasks={p.tasks} onOpenTask={p.onOpenTask} relay={t.relayId && cardTurn.get(t.relayId) === t.id ? p.relays[t.relayId] : undefined} onOpenRelay={p.onOpenRelay} />
           ))}
         </div>
         {!empty && composer}
@@ -173,7 +180,7 @@ function Elapsed({ since }: { since: number }) {
   return <span className="elapsed">{Math.round((Date.now() - since) / 1000)}s</span>
 }
 
-function TurnView({ turn, latest, task, tasks, onOpenTask }: { turn: Turn; latest: boolean; task?: AgentTask; tasks: Record<string, AgentTask>; onOpenTask: (id: string) => void }) {
+function TurnView({ turn, latest, task, tasks, onOpenTask, relay, onOpenRelay }: { turn: Turn; latest: boolean; task?: AgentTask; tasks: Record<string, AgentTask>; onOpenTask: (id: string) => void; relay?: RelayRun; onOpenRelay: (id: string) => void }) {
   const api = window.bluevis
   if (turn.speaker === 'user') {
     return (
@@ -262,6 +269,7 @@ function TurnView({ turn, latest, task, tasks, onOpenTask }: { turn: Turn; lates
           ))}
         </div>
       )}
+      {relay && <RelayInline run={relay} onOpen={() => onOpenRelay(relay.id)} />}
       {task && (
         <button className="task-inline" onClick={() => onOpenTask(task.id)}>
           <span className="mono" style={{ color: 'var(--bone)' }}>

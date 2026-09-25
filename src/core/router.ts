@@ -16,6 +16,7 @@ export type Intent =
   | { type: 'stop-speech' }
   | { type: 'switch-brain'; provider: 'codex' | 'claude' | 'local' }
   | { type: 'new-conversation' }
+  | { type: 'relay'; url: string; note?: string }
 
 const AGENT_WORDS: Record<string, { agent: AgentName; model?: string }> = {
   codex: { agent: 'codex' },
@@ -50,6 +51,16 @@ function escape(s: string) {
 export function route(raw: string, projects: string[] = []): Intent {
   const text = stripWake(raw)
   const lower = text.toLowerCase().replace(/[.!?]+$/, '').trim()
+
+  // Any Devpost link starts a hackathon relay; the rest of the message becomes the note.
+  const devpost = text.match(/https?:\/\/[a-z0-9-]+\.devpost\.com\S*/i)
+  if (devpost) {
+    const note = text
+      .replace(devpost[0], '')
+      .replace(/^(please\s+)?(brainstorm|relay|run (a |the )?(hackathon )?relay|ideas?|plan)\s*(on|for|about)?\s*(this)?[:,.]?\s*/i, '')
+      .trim()
+    return { type: 'relay', url: devpost[0].replace(/[).,]+$/, ''), note: note || undefined }
+  }
 
   if (/^(stop|shh+|quiet|shut up|stop talking|be quiet|enough)$/.test(lower)) return { type: 'stop-speech' }
 

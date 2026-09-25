@@ -332,6 +332,16 @@ export class Vault {
     await this.commit(`Agent run: ${t.title.slice(0, 60)}`)
   }
 
+  /** Save a deliverable under Outputs/. Outputs are not evidence for their own claims. */
+  async writeOutput(name: string, body: string, fm: Frontmatter): Promise<string> {
+    const rel = `Outputs/${name.split('/').map(safeTitle).join('/')}.md`
+    const full = this.safePath(rel)
+    mkdirSync(dirname(full), { recursive: true })
+    writeFileSync(full, serializeNote({ title: name.split('/').pop()!, ...fm, updated: today() }, body))
+    await this.commit(`Output: ${name.split('/').pop()}`)
+    return rel
+  }
+
   latestSession(project?: string): { path: string; body: string } | undefined {
     const sessions = this.load()
       .filter((n) => n.area === 'Sessions' && (!project || String(n.data.project ?? '').toLowerCase().includes(project.toLowerCase())))
