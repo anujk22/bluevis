@@ -24,6 +24,10 @@ v0.1 core loop is built and runs: orb, text chat through Codex/Claude/local, loc
 | Local voice: Whisper large-v3-turbo + Kokoro (`bm_george`) on MLX via a `uv` Python sidecar | No paid TTS. STT ~0.2s warm. First run downloads ~2GB of models. |
 | Screen only on demand (⌥⇧L or the eye button) | No continuous observation (PRD §9). |
 
+## How memory reaches a model (retrieval)
+
+Nothing loads the whole vault. Per turn Bluevis sends: `Profile/Core.md` (~1.3k chars, always), the active project's note, and the top ~6 passages from hybrid search, capped at ~7k chars (~2k tokens). Notes are split at headings into passages (`src/core/retrieval.ts`), scored with BM25 (titles + Obsidian `aliases` weighted) and fused (reciprocal rank) with local bge-small embeddings from the sidecar (`/embed`, fastembed on CPU, cached in userData/embeddings.json). Without the sidecar it falls back to keywords only. `Sources/` and `index: false` notes are never retrieved; `share: local-only` passages only go to local models. Each reply shows the passages it was given, and Memory has a search box that runs the same retrieval.
+
 ## Checklist
 
 ### Phase 1: foundation (done)
@@ -52,7 +56,12 @@ v0.1 core loop is built and runs: orb, text chat through Codex/Claude/local, loc
 - [x] Decision → `Decisions/` note, "I'm done" → `Sessions/` note, "where did I leave off" → grounded resume
 - [x] Voice sidecar recovers if it dies (restart + honest message)
 
-### Phase 4: next up
+### Phase 4: knowledge (done)
+- [x] Personal knowledge export split into 53 notes (Profile, Education, Career, Projects, Tools, Interests, Work, Private, People), text preserved, citations kept, private sections `local-only`, raw export kept in `Sources/Raw` (not retrieved)
+- [x] Hybrid retrieval (BM25 + embeddings + aliases), sources shown on replies, Memory search
+- [x] Sidecar versioning: a stale sidecar from before an update is replaced, not adopted
+
+### Phase 5: next up
 - [x] Link vault project notes to repos by `path:` (Yonder → `Hackathons/Shopify`, observed from its git remote)
 - [x] ChatGPT export importer (Memory → Teach and review): active-branch parsing, batched extraction with Codex `--output-schema`, review queue with keep/edit/discard, ledger in `vault/.bluevis/imports.json` so re-imports skip processed threads and never resurrect discarded items
 - [x] "In your own words" dump → proposals through the same pipeline (voice input for it still to do)

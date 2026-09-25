@@ -5,6 +5,8 @@ import type { VoiceHealth } from '../core/types'
 
 const PORT = 47821
 const BASE = `http://127.0.0.1:${PORT}`
+/** Must match VERSION in voice/server.py. */
+const SIDECAR_VERSION = 2
 
 /** Manages the local Python voice sidecar (Whisper STT + Kokoro TTS on MLX). */
 export class VoiceService {
@@ -20,20 +22,30 @@ export class VoiceService {
   }
 
   private async alive(): Promise<boolean> {
+    return (await this.version()) !== null
+  }
+
+  private async version(): Promise<number | null> {
     try {
       const r = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(800) })
-      return r.ok
+      return r.ok ? (((await r.json()) as { version?: number }).version ?? 1) : null
     } catch {
-      return false
+      return null
     }
   }
 
   start(): Promise<void> {
     if (this.starting) return this.starting
     this.starting = (async () => {
-      if (await this.alive()) {
+      const running = await this.version()
+      if (running === SIDECAR_VERSION) {
         this.set({ state: 'ready', detail: 'Local voice ready' })
         return
+      }
+      if (running !== null) {
+        // An older sidecar (from before an update) is still up; replace it.
+        await fetch(`${BASE}/shutdown`, { method: 'POST' }).catch(() => null)
+        for (let i = 0; i < 20 && (await this.alive()); i++) await new Promise((r) => setTimeout(r, 250))
       }
       this.set({ state: 'starting', detail: 'Starting local voice (first run downloads models)' })
       const script = app.isPackaged ? join(process.resourcesPath, 'voice', 'server.py') : join(app.getAppPath(), 'voice', 'server.py')
@@ -76,6 +88,18 @@ export class VoiceService {
       this.set({ state: 'starting', detail: 'Voice restarted after the local service stopped' })
       void this.start()
       throw new Error('The local voice service stopped and is restarting. Try again in a few seconds.')
+    }
+  }
+
+  /** Local text embeddings for retrieval; null when the sidecar is not running (callers fall back to keywords). */
+  async embed(texts: string[], query = false): Promise<number[][] | null> {
+    if (this.health.state !== 'ready' || !texts.length) return null
+    try {
+      const r = await fetch(`${BASE}/embed`, { method: 'POST', body: JSON.stringify({ texts, query }), headers: { 'Content-Type': 'application/json' } })
+      if (!r.ok) return null
+      return ((await r.json()) as { vectors: number[][] }).vectors
+    } catch {
+      return null
     }
   }
 

@@ -4,7 +4,17 @@ import type { Atlas, NoteSummary } from '../../../core/types'
 import { Markdown } from '../components/Markdown'
 import { Review, useProposals } from './Review'
 
-const ORDER = ['Profile', 'Projects', 'Decisions', 'Ideas', 'Learning', 'Career', 'Work', 'Sessions', 'Outputs', 'Skills', 'Inbox', 'Sources', 'Home']
+interface Hit {
+  id: string
+  path: string
+  title: string
+  heading: string
+  text: string
+  localOnly: boolean
+  via: string
+}
+
+const ORDER = ['Profile', 'Projects', 'Career', 'Education', 'Decisions', 'Ideas', 'Tools', 'Interests', 'People', 'Work', 'Private', 'Sessions', 'Outputs', 'Skills', 'Inbox', 'Sources', 'Home']
 
 const GLYPH: Record<string, string> = { known: '●', 'needs-review': '◐', exploratory: '○', historical: '◌', superseded: '⊘' }
 const WORDS: Record<string, string> = { known: 'known', 'needs-review': 'needs review', exploratory: 'idea', historical: 'historical', superseded: 'superseded' }
@@ -33,6 +43,9 @@ export function Memory() {
   const [area, setArea] = useState<string>('Profile')
   const [open, setOpen] = useState<NoteSummary | null>(null)
   const [content, setContent] = useState<string>('')
+  const [query, setQuery] = useState('')
+  const [hits, setHits] = useState<Hit[] | null>(null)
+  const runSearch = async (q: string) => setHits(q.trim() ? ((await api.memory.search(q)) as Hit[]) : null)
 
   const load = () => api.memory.atlas().then((a) => setAtlas(a as Atlas))
   useEffect(() => {
@@ -116,6 +129,38 @@ export function Memory() {
                 Open vault
               </button>
             </div>
+            <form
+              className="search"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void runSearch(query)
+              }}
+            >
+              <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by meaning, e.g. “how are my grades”" aria-label="Search your vault" />
+              <button className="btn" type="submit">
+                Search
+              </button>
+            </form>
+            {hits && (
+              <div className="hits">
+                <div className="eyebrow">
+                  {hits.length ? `What Bluevis would retrieve for “${query}”` : 'Nothing relevant found'}
+                </div>
+                {hits.map((h) => (
+                  <button key={h.id} className="hit" onClick={() => setOpen(atlas?.notes.find((n) => n.path === h.path) ?? null)}>
+                    <div className="row">
+                      <h5>{h.title}</h5>
+                      {h.heading && <span className="mono" style={{ color: 'var(--mist)' }}>› {h.heading}</span>}
+                      <span className="mono" style={{ marginLeft: 'auto', color: 'var(--faint)' }}>
+                        {h.localOnly ? 'local only · ' : ''}
+                        {h.via}
+                      </span>
+                    </div>
+                    <p>{h.text.replace(/[*`#>|]/g, '').slice(0, 400)}</p>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="eyebrow" style={{ marginBottom: 12 }}>
               {area}
             </div>

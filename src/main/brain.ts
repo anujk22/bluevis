@@ -202,7 +202,7 @@ export class Brain {
     const s = getSettings()
     const choice = s.brain
     const allowPrivate = choice.provider === 'local'
-    const knowledge = this.vault.context(text, { allowPrivate, project: this.activeProject?.name })
+    const { text: knowledge, used } = await this.vault.context(text, { allowPrivate, project: this.activeProject?.name })
     const projects = await this.projects()
     const running = this.tasks.active()
     const env = [
@@ -218,7 +218,7 @@ export class Brain {
       .join('\n')
     const prompt = `<situation>\n${env}\n</situation>\n\n<knowledge>\n${knowledge || '(nothing relevant in the vault)'}\n</knowledge>\n\nAnuj${screenshot ? ' (looking at the screen)' : ''}: ${text}`
 
-    const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: label(choice) })
+    const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: label(choice), sources: used })
     this.ev.busy(true)
     try {
       const raw = await this.runBrain(prompt, {
@@ -280,7 +280,7 @@ export class Brain {
       action.agent === 'claude'
         ? { provider: 'claude', model: action.model ?? 'opus' }
         : { provider: 'codex', model: action.model ?? (s.worker.provider === 'codex' ? s.worker.model : 'gpt-6-sol'), effort: s.worker.effort ?? 'medium' }
-    const brief = this.handoffBrief(project, action.prompt, choice)
+    const brief = await this.handoffBrief(project, action.prompt, choice)
     const title = action.prompt.charAt(0).toUpperCase() + action.prompt.slice(1, 90)
     const task = this.tasks.start({ title, prompt: brief, choice, cwd: project.path, project: project.name })
     if (turnId) {
@@ -297,8 +297,8 @@ export class Brain {
   }
 
   /** A scoped context brief for the agent: objective, project knowledge, constraints. Never local-only notes. */
-  private handoffBrief(project: Project, objective: string, choice: ModelChoice): string {
-    const knowledge = this.vault.context(`${project.name} ${objective}`, { allowPrivate: choice.provider === 'local', project: project.name, maxChars: 5000 })
+  private async handoffBrief(project: Project, objective: string, choice: ModelChoice): Promise<string> {
+    const { text: knowledge } = await this.vault.context(objective, { allowPrivate: choice.provider === 'local', project: project.name, maxChars: 5000 })
     return `${objective}
 
 <handoff from="Bluevis">
@@ -360,7 +360,7 @@ Constraints:
       run('git', ['status', '--short'], { cwd: project.path })
     ])
     const session = this.vault.latestSession(project.name)
-    const note = this.vault.context(project.name, { allowPrivate: getSettings().brain.provider === 'local', project: project.name, maxChars: 4000 })
+    const { text: note } = await this.vault.context(`${project.name} status progress next steps`, { allowPrivate: getSettings().brain.provider === 'local', project: project.name, maxChars: 4000 })
     const agentRuns = this.tasks.list().filter((t) => t.project === project.name).slice(0, 3)
     const evidence = `<evidence>
 Project: ${project.name} at ${project.path}, branch ${project.branch ?? '?'}

@@ -1,11 +1,12 @@
 # /// script
 # requires-python = ">=3.11,<3.13"
-# dependencies = ["mlx-audio>=0.2", "misaki[en]", "mlx-whisper", "soundfile", "numpy"]
+# dependencies = ["mlx-audio>=0.2", "misaki[en]", "mlx-whisper", "soundfile", "numpy", "fastembed"]
 # ///
-"""Bluevis local voice sidecar.
+"""Bluevis local sidecar.
 
-Speech-to-text with Whisper (MLX) and text-to-speech with Kokoro (MLX), served
-on localhost only. Models load lazily on first use (or via POST /warm) and stay
+Speech-to-text with Whisper (MLX), text-to-speech with Kokoro (MLX) and small
+CPU text embeddings for vault retrieval (fastembed, bge-small), served on
+localhost only. Models load lazily on first use (or via POST /warm) and stay
 resident. Started and stopped by the Electron main process.
 """
 
@@ -22,11 +23,16 @@ import soundfile as sf
 
 STT_MODEL = os.environ.get("BLUEVIS_STT_MODEL", "mlx-community/whisper-large-v3-turbo")
 TTS_MODEL = os.environ.get("BLUEVIS_TTS_MODEL", "mlx-community/Kokoro-82M-bf16")
+EMBED_MODEL = os.environ.get("BLUEVIS_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 SAMPLE_RATE = 24000
+# Bump when endpoints change so the app replaces an older running sidecar.
+VERSION = 2
 
 # MLX is not thread-safe; serialize all model work.
 lock = threading.Lock()
-state = {"tts": None, "stt_ready": False}
+state = {"tts": None, "stt_ready": False, "embed": None}
+# Embeddings run on CPU (onnxruntime), so they do not contend with MLX for the lock.
+embed_lock = threading.Lock()
 
 
 def log(*args):
@@ -41,6 +47,18 @@ def get_tts():
         state["tts"] = load_model(TTS_MODEL)
         log(f"tts loaded in {time.time() - t:.1f}s")
     return state["tts"]
+
+
+def embed(texts, query):
+    if state["embed"] is None:
+        from fastembed import TextEmbedding
+
+        t = time.time()
+        state["embed"] = TextEmbedding(EMBED_MODEL)
+        log(f"embeddings loaded in {time.time() - t:.1f}s")
+    model = state["embed"]
+    vectors = model.query_embed(texts) if query else model.embed(texts, batch_size=64)
+    return [[round(float(x), 5) for x in v] for v in vectors]
 
 
 def transcribe(path):
@@ -81,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            return self.reply(200, {"ok": True, "tts": state["tts"] is not None, "stt": state["stt_ready"]})
+            return self.reply(200, {"ok": True, "version": VERSION, "tts": state["tts"] is not None, "stt": state["stt_ready"], "embed": state["embed"] is not None})
         self.reply(404, {"error": "not found"})
 
     def do_POST(self):
@@ -99,6 +117,15 @@ class Handler(BaseHTTPRequestHandler):
                 with lock:
                     wav = synthesize(req.get("text", ""), req.get("voice", "bm_george"), float(req.get("speed", 1.0)))
                 return self.reply(200, wav, "audio/wav")
+            if self.path == "/shutdown":
+                self.reply(200, {"ok": True})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                return
+            if self.path == "/embed":
+                req = json.loads(self.body() or b"{}")
+                with embed_lock:
+                    vectors = embed(req.get("texts", []), bool(req.get("query")))
+                return self.reply(200, {"model": EMBED_MODEL, "vectors": vectors})
             if self.path == "/warm":
                 with lock:
                     get_tts()

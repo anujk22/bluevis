@@ -2,9 +2,11 @@ import { app } from 'electron'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
-import { parseNote, rank, safeTitle, serializeNote, type Frontmatter } from '../core/notes'
+import { parseNote, safeTitle, serializeNote, type Frontmatter } from '../core/notes'
+import { BM25, chunkNote, cosine, fuse, type Passage } from '../core/retrieval'
+import { createHash } from 'node:crypto'
 import type { MemoryWrite } from '../core/reply'
-import type { AgentTask, Atlas, MemoryChange, NoteSummary } from '../core/types'
+import type { AgentTask, Atlas, MemoryChange, NoteSummary, SourceRef } from '../core/types'
 import { run } from './shell'
 
 interface LoadedNote extends NoteSummary {
@@ -123,24 +125,114 @@ export class Vault {
     return full
   }
 
-  /**
-   * Relevant knowledge for a model turn. Notes marked `share: local-only` are
-   * excluded unless the target provider runs locally (PRD §10.9).
-   */
-  context(query: string, opts: { allowPrivate: boolean; project?: string; maxChars?: number }): string {
-    const notes = this.load().filter((n) => opts.allowPrivate || n.data.share !== 'local-only')
-    const core = notes.filter((n) => n.area === 'Profile')
-    const project = opts.project ? notes.find((n) => n.area === 'Projects' && n.title.toLowerCase() === opts.project!.toLowerCase()) : undefined
-    const ranked = rank(query, notes.filter((n) => n.area !== 'Profile' && n !== project), 4)
-    const blocks: string[] = []
-    const add = (n: LoadedNote, limit: number) => {
-      const meta = [n.status && `status: ${n.status}`, n.source && `source: ${n.source}`, n.updated && `updated: ${n.updated}`].filter(Boolean).join('; ')
-      blocks.push(`### ${n.path}${meta ? ` (${meta})` : ''}\n${n.body.trim().slice(0, limit)}`)
+  private index: { sig: string; passages: Passage[]; bm25: BM25 } | null = null
+  private vectors = new Map<string, number[]>()
+  private vectorsLoaded = false
+  private filling: Promise<void> | null = null
+  /** Set by main once the local sidecar can embed text. */
+  embedder: ((texts: string[], query: boolean) => Promise<number[][] | null>) | null = null
+
+  private passages() {
+    // Provenance records (Sources/) describe where knowledge came from; they are not knowledge to retrieve.
+    const notes = this.load().filter((n) => String(n.data.index) !== 'false' && n.path !== 'Profile/Core.md' && n.area !== 'Sources')
+    const sig = notes.map((n) => `${n.path}:${n.mtime}`).join('|')
+    if (this.index?.sig !== sig) {
+      const passages = notes.flatMap((n) =>
+        chunkNote({ path: n.path, title: n.title, area: n.area, body: n.body, status: n.status, localOnly: n.data.share === 'local-only', aliases: Array.isArray(n.data.aliases) ? n.data.aliases : undefined })
+      )
+      this.index = { sig, passages, bm25: new BM25(passages) }
     }
-    for (const n of core) add(n, 900)
-    if (project) add(project, 2500)
-    for (const n of ranked) add(n, 1200)
-    return blocks.join('\n\n').slice(0, opts.maxChars ?? 9000)
+    return this.index
+  }
+
+  private get vectorFile() {
+    return join(app.getPath('userData'), 'embeddings.json')
+  }
+
+  private embedText(p: Passage) {
+    return `${p.title}${p.aliases?.length ? ` (${p.aliases.join(', ')})` : ''}. ${p.heading}. ${p.text}`
+  }
+
+  private key(p: Passage) {
+    return createHash('sha1').update(`${this.embedText(p)}`).digest('hex').slice(0, 16)
+  }
+
+  /** Embed any passages that changed since last time. Runs in the background; retrieval never waits on it. */
+  refreshEmbeddings(): Promise<void> {
+    if (this.filling || !this.embedder) return this.filling ?? Promise.resolve()
+    this.filling = (async () => {
+      if (!this.vectorsLoaded) {
+        try {
+          const saved = JSON.parse(readFileSync(this.vectorFile, 'utf8')) as Record<string, number[]>
+          for (const [k, v] of Object.entries(saved)) this.vectors.set(k, v)
+        } catch {
+          // First run: nothing cached yet.
+        }
+        this.vectorsLoaded = true
+      }
+      const { passages } = this.passages()
+      const missing = passages.filter((p) => !this.vectors.has(this.key(p)))
+      for (let i = 0; i < missing.length; i += 64) {
+        const batch = missing.slice(i, i + 64)
+        const vecs = await this.embedder!(batch.map((p) => this.embedText(p)), false)
+        if (!vecs) break
+        batch.forEach((p, j) => this.vectors.set(this.key(p), vecs[j]))
+      }
+      const live = new Set(passages.map((p) => this.key(p)))
+      writeFileSync(this.vectorFile, JSON.stringify(Object.fromEntries([...this.vectors].filter(([k]) => live.has(k)))))
+    })().finally(() => (this.filling = null))
+    return this.filling
+  }
+
+  /** Hybrid keyword + semantic passage search. Used for model context and the Memory search box. */
+  async search(query: string, opts: { allowPrivate: boolean; project?: string; limit?: number }): Promise<(Passage & { via: string })[]> {
+    const { passages, bm25 } = this.passages()
+    const allowed = (p: Passage) => opts.allowPrivate || !p.localOnly
+    const keyword = bm25.scores(opts.project ? `${query} ${opts.project}` : query).map((s, i) => (allowed(passages[i]) ? s : 0))
+    let semantic: number[] | null = null
+    if (this.embedder) {
+      const qv = (await this.embedder([query], true))?.[0]
+      if (qv) semantic = passages.map((p) => (allowed(p) ? cosine(qv, this.vectors.get(this.key(p)) ?? []) : 0))
+      void this.refreshEmbeddings()
+    }
+    // bge-small similarities cluster together, so only near-best semantic matches count.
+    const best = semantic ? Math.max(...semantic) : 0
+    const cutoff = Math.max(0.55, best - 0.08)
+    const picked = fuse(keyword, semantic, opts.limit ?? 6, cutoff)
+    const project = opts.project?.toLowerCase()
+    const projectFirst = project ? passages.findIndex((p) => p.area === 'Projects' && p.title.toLowerCase() === project && allowed(p)) : -1
+    if (projectFirst >= 0 && !picked.includes(projectFirst)) picked.unshift(projectFirst)
+    return picked.map((i) => ({
+      ...passages[i],
+      via: [keyword[i] > 0 && 'keywords', semantic && semantic[i] >= cutoff && 'meaning', i === projectFirst && 'active project'].filter(Boolean).join(' + ')
+    }))
+  }
+
+  /**
+   * Scoped context for one model turn: the Core card, the active project's note,
+   * and the few passages most relevant to the query (keyword + semantic).
+   * `share: local-only` material is excluded unless the model runs locally (PRD §10.9).
+   */
+  async context(query: string, opts: { allowPrivate: boolean; project?: string; maxChars?: number; limit?: number }): Promise<{ text: string; used: SourceRef[] }> {
+    const budget = opts.maxChars ?? 7000
+    const blocks: string[] = []
+    const used: SourceRef[] = []
+    let size = 0
+    const add = (ref: SourceRef, meta: string, body: string) => {
+      const block = `### ${ref.title}${ref.heading ? ` › ${ref.heading}` : ''} (${ref.path}${meta ? `; ${meta}` : ''})\n${body.trim()}`
+      if (size + block.length > budget) return
+      blocks.push(block)
+      used.push(ref)
+      size += block.length
+    }
+    const notes = this.load()
+    const core = notes.find((n) => n.path === 'Profile/Core.md')
+    if (core) add({ path: core.path, title: 'Core' }, '', core.body.replace(/^The always-loaded card.*$/m, ''))
+
+    for (const p of await this.search(query, { allowPrivate: opts.allowPrivate, project: opts.project, limit: opts.limit ?? 6 })) {
+      add({ path: p.path, title: p.title, heading: p.heading || undefined }, p.status ? `status: ${p.status}` : '', p.text)
+    }
+    return { text: blocks.join('\n\n'), used }
   }
 
   /** Persist a memory the brain proposed or the user asked for. Returns the note path and commit hash. */
@@ -148,8 +240,8 @@ export class Vault {
     const stamp = `(learned ${today()}; ${w.origin})`
     let rel: string
     if (w.kind === 'preference' || w.kind === 'goal') {
-      rel = w.kind === 'preference' ? 'Profile/Preferences.md' : 'Profile/Goals and direction.md'
-      this.appendBullet(rel, { title: w.kind === 'preference' ? 'Preferences' : 'Goals and direction', status: 'known' }, `${w.text} ${stamp}`)
+      rel = w.kind === 'preference' ? 'Profile/Preferences.md' : 'Profile/Goals.md'
+      this.appendBullet(rel, { title: w.kind === 'preference' ? 'Preferences' : 'Goals and dated commitments', status: 'known' }, `${w.text} ${stamp}`)
     } else if (w.kind === 'project' && w.project) {
       rel = `Projects/${safeTitle(w.project)}.md`
       this.appendBullet(rel, { title: w.project, status: w.status ?? 'needs-review' }, `${w.title}: ${w.text} ${stamp}`, '## Log')

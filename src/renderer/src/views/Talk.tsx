@@ -251,6 +251,17 @@ function TurnView({ turn, latest, task, tasks, onOpenTask }: { turn: Turn; lates
           {rest.length > 0 && <Markdown className="detail" text={rest.join('\n\n')} />}
         </>
       )}
+      {!turn.pending && turn.sources && turn.sources.length > 0 && (
+        <div className="sources-line">
+          <span className="eyebrow">From your vault</span>
+          {turn.sources.map((s) => (
+            <button key={`${s.path}#${s.heading ?? ''}`} className="source-chip" onClick={() => api.memory.open(s.path)} title={s.path}>
+              {s.title}
+              {s.heading ? <span> › {s.heading}</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
       {task && (
         <button className="task-inline" onClick={() => onOpenTask(task.id)}>
           <span className="mono" style={{ color: 'var(--bone)' }}>

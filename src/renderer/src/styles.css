@@ -1751,3 +1751,92 @@ kbd {
   color: var(--bone-2);
   font-size: 13.5px;
 }
+
+/* ————— Retrieval transparency ————— */
+
+.sources-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.sources-line .eyebrow {
+  margin-right: 4px;
+}
+
+.source-chip {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--bone-2);
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.source-chip span {
+  color: var(--faint);
+}
+
+.source-chip:hover {
+  border-color: rgba(134, 172, 255, 0.4);
+  color: var(--bone);
+}
+
+.search {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.search .input {
+  flex: 1;
+  height: 38px;
+  font-size: 13.5px;
+}
+
+.hits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 26px;
+}
+
+.hit {
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(8, 16, 42, 0.35);
+}
+
+.hit:hover {
+  border-color: var(--line-2);
+}
+
+.hit .row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.hit h5 {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 19px;
+}
+
+.hit p {
+  margin: 0;
+  color: var(--mist);
+  font-size: 12.5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

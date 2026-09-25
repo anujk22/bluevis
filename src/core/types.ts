@@ -89,6 +89,8 @@ export interface Turn {
   /** A memory write, with its vault commit so it can be undone. */
   memory?: { path: string; title: string; hash?: string; undone?: boolean }
   taskId?: string
+  /** Vault passages the model was given for this reply. */
+  sources?: SourceRef[]
 }
 
 export interface TurnAction {
@@ -100,6 +102,13 @@ export interface TurnAction {
   state: 'proposed' | 'started' | 'dismissed'
   /** Candidate projects when the target was ambiguous. */
   choices?: string[]
+}
+
+/** A vault passage that was given to the model for a reply. */
+export interface SourceRef {
+  path: string
+  title: string
+  heading?: string
 }
 
 export type OrbMode = 'idle' | 'listening' | 'thinking' | 'speaking' | 'acting' | 'approval' | 'error'

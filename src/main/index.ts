@@ -89,7 +89,11 @@ app.whenReady().then(async () => {
   const vault = new Vault(settings.vaultPath)
   await vault.ensure()
 
-  const voice = new VoiceService((h) => send('voice:health', h))
+  const voice = new VoiceService((h) => {
+    send('voice:health', h)
+    if (h.state === 'ready') void vault.refreshEmbeddings()
+  })
+  vault.embedder = (texts, query) => voice.embed(texts, query)
   let brain: Brain
   const tasks = new TaskManager(
     (t) => send('task', t),
@@ -148,6 +152,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('project:reveal', (_e, path: string) => shell.openPath(path))
   ipcMain.handle('memory:atlas', () => vault.atlas())
   ipcMain.handle('memory:revert', (_e, hash: string) => vault.undo(hash))
+  ipcMain.handle('memory:search', (_e, q: string) => vault.search(q, { allowPrivate: true, limit: 8 }))
   ipcMain.handle('memory:read', (_e, rel: string) => vault.read(rel))
   ipcMain.handle('memory:open', async (_e, rel?: string) => {
     const target = rel ? join(vault.root, rel) : vault.root
