@@ -87,3 +87,43 @@ export function splitSentences(text: string): string[] {
   if (rest) out.push(rest)
   return out
 }
+
+/**
+ * Turns a streaming reply into speakable sentences as they complete, so speech can
+ * start before the model finishes. Stops at the '---' separator (detail is never
+ * spoken) and after `max` sentences when no separator has appeared yet.
+ */
+export class SpeechStream {
+  private emitted = 0
+
+  constructor(
+    private emit: (sentence: string) => void,
+    private max = 3
+  ) {}
+
+  private sentences(raw: string): { list: string[]; closed: boolean } {
+    const text = raw
+      .split('\n')
+      .filter((l) => !/^\s*(ACTION|MEMORY):/.test(l))
+      .join('\n')
+    const sep = text.search(/\n\s*---\s*(\n|$)/)
+    const region = sep >= 0 ? text.slice(0, sep) : text.split(/\n\s*\n/)[0].split('```')[0]
+    return { list: splitSentences(speakable(region)), closed: sep >= 0 }
+  }
+
+  /** Feed the full partial text so far. */
+  feed(partial: string) {
+    const { list, closed } = this.sentences(partial)
+    const cap = closed ? list.length : this.max
+    // The last sentence may still be growing unless the spoken part is closed.
+    const ready = closed ? list : list.slice(0, -1)
+    while (this.emitted < Math.min(ready.length, cap)) this.emit(ready[this.emitted++])
+  }
+
+  /** Flush whatever remains of the final spoken text. Returns true if anything was spoken. */
+  finish(spoken: string): boolean {
+    const list = splitSentences(spoken)
+    while (this.emitted < list.length) this.emit(list[this.emitted++])
+    return this.emitted > 0
+  }
+}

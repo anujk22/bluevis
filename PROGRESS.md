@@ -2,7 +2,7 @@
 
 Single source of truth for build status. **Any agent picking this up: read this file first, then `AGENTS.md`.** Update it in the same commit as the work it describes.
 
-Last updated: 2026-09-25 01:30 ET by Claude Opus (Claude Code session)
+Last updated: 2026-09-25 03:00 ET by Claude Opus (Claude Code session)
 
 ## Current state
 
@@ -70,7 +70,10 @@ Nothing loads the whole vault. Per turn Bluevis sends: `Profile/Core.md` (~1.3k 
 - [x] Glass redesign (navy fog, pearl orb, glass header/cards/composer), native traffic lights, menu bar icon, orb app icon
 - [x] Installable app: `npx electron-builder --mac dir` then copy `dist/mac-arm64/Bluevis.app` to /Applications
 - [ ] GPT image generation as an MCP tool for Claude (Codex image_generation works from exec, ~60s/image)
-- [ ] Gemini provider (Gemini CLI not installed yet)
+- [~] Gemini provider (CLI 0.61 installed and wired, streams; needs a one-time `gemini` Google sign-in before it can be verified)
+- [x] Streaming speech: sentences are spoken as the reply streams (Gemini, Claude, local); Codex still speaks after completion
+- [x] Memory gate: general questions get a one-line identity only; the vault is consulted for personal, schedule, work and project questions, with strict meaning-gated retrieval (thresholds measured on the real vault)
+- [x] Graphite glass theme, centered nav, Codex remaining meter in the header
 
 ### Phase 6: next up
 - [x] Link vault project notes to repos by `path:` (Yonder → `Hackathons/Shopify`, observed from its git remote)

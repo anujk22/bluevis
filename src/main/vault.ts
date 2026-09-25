@@ -2,8 +2,8 @@ import { app } from 'electron'
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
-import { parseNote, safeTitle, serializeNote, type Frontmatter } from '../core/notes'
-import { BM25, chunkNote, cosine, fuse, type Passage } from '../core/retrieval'
+import { parseNote, safeTitle, serializeNote, tokens, type Frontmatter } from '../core/notes'
+import { BM25, chunkNote, cosine, fuse, stem, type Passage } from '../core/retrieval'
 import { createHash } from 'node:crypto'
 import type { MemoryWrite } from '../core/reply'
 import type { AgentTask, Atlas, MemoryChange, NoteSummary, SourceRef } from '../core/types'
@@ -185,7 +185,10 @@ export class Vault {
   }
 
   /** Hybrid keyword + semantic passage search. Used for model context and the Memory search box. */
-  async search(query: string, opts: { allowPrivate: boolean; project?: string; limit?: number }): Promise<(Passage & { via: string })[]> {
+  async search(
+    query: string,
+    opts: { allowPrivate: boolean; project?: string; limit?: number; strict?: boolean }
+  ): Promise<(Passage & { via: string; kw: number; sem: number })[]> {
     const { passages, bm25 } = this.passages()
     const allowed = (p: Passage) => opts.allowPrivate || !p.localOnly
     const keyword = bm25.scores(opts.project ? `${query} ${opts.project}` : query).map((s, i) => (allowed(passages[i]) ? s : 0))
@@ -196,8 +199,25 @@ export class Vault {
       void this.refreshEmbeddings()
     }
     // bge-small similarities cluster together, so only near-best semantic matches count.
+    // Strict mode (model context) measured on the real vault: relevant passages score
+    // 0.64-0.74, noise 0.40-0.62, so context requires a strong meaning match and keywords
+    // only help ranking. Browsing (the Memory search box) stays looser.
     const best = semantic ? Math.max(...semantic) : 0
-    const cutoff = Math.max(0.55, best - 0.08)
+    const cutoff = opts.strict ? Math.max(0.63, best - 0.06) : Math.max(0.55, best - 0.08)
+    if (opts.strict) {
+      // Naming a note directly (its title or an Obsidian alias like "internship") also
+      // qualifies, which catches vocabulary the embedding model maps poorly. Body-word
+      // matches alone never do: they are what pulled unrelated notes in before.
+      const q = new Set(tokens(query).map(stem))
+      const named = (p: Passage) => tokens([p.title, ...(p.aliases ?? [])].join(' ')).some((t) => q.has(stem(t)))
+      const keep = passages.map((p, i) => (semantic ? semantic[i] >= cutoff || (named(p) && semantic[i] >= 0.45) : named(p)))
+      for (let i = 0; i < keyword.length; i++) {
+        if (!keep[i]) {
+          keyword[i] = 0
+          if (semantic) semantic[i] = 0
+        } else if (semantic && semantic[i] < cutoff) semantic[i] = cutoff
+      }
+    }
     // Generated outputs and session logs rank below real knowledge, and no note may crowd out others.
     const derived = (i: number) => /^(Outputs|Sessions)$/.test(passages[i].area)
     const perNote = new Map<string, number>()
@@ -214,6 +234,8 @@ export class Vault {
     if (projectFirst >= 0 && !picked.includes(projectFirst)) picked.unshift(projectFirst)
     return picked.map((i) => ({
       ...passages[i],
+      kw: Math.round(keyword[i] * 100) / 100,
+      sem: semantic ? Math.round(semantic[i] * 1000) / 1000 : 0,
       via: [keyword[i] > 0 && 'keywords', semantic && semantic[i] >= cutoff && 'meaning', i === projectFirst && 'active project'].filter(Boolean).join(' + ')
     }))
   }
@@ -239,7 +261,7 @@ export class Vault {
     const core = notes.find((n) => n.path === 'Profile/Core.md')
     if (core) add({ path: core.path, title: 'Core' }, '', core.body.replace(/^The always-loaded card.*$/m, ''))
 
-    for (const p of await this.search(query, { allowPrivate: opts.allowPrivate, project: opts.project, limit: opts.limit ?? 6 })) {
+    for (const p of await this.search(query, { allowPrivate: opts.allowPrivate, project: opts.project, limit: opts.limit ?? 4, strict: true })) {
       add({ path: p.path, title: p.title, heading: p.heading || undefined }, p.status ? `status: ${p.status}` : '', p.text)
     }
     return { text: blocks.join('\n\n'), used }

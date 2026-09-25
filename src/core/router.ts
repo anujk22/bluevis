@@ -14,7 +14,7 @@ export type Intent =
   | { type: 'status' }
   | { type: 'stop-task'; agent?: AgentName }
   | { type: 'stop-speech' }
-  | { type: 'switch-brain'; provider: 'codex' | 'claude' | 'local' }
+  | { type: 'switch-brain'; provider: 'codex' | 'claude' | 'gemini' | 'local' }
   | { type: 'new-conversation' }
   | { type: 'relay'; url: string; note?: string }
   | { type: 'mail'; text: string }
@@ -69,8 +69,8 @@ export function route(raw: string, projects: string[] = []): Intent {
   const stop = lower.match(/^(?:stop|cancel|kill|abort)\s+(?:the\s+)?(codex|claude|agent|task)s?\b/)
   if (stop) return { type: 'stop-task', agent: stop[1] === 'codex' || stop[1] === 'claude' ? stop[1] : undefined }
 
-  const sw = lower.match(/^(?:switch to|use)\s+(codex|gpt|claude|local|the local model)(?:\s+(?:for chat|as (?:the )?brain))?$/)
-  if (sw) return { type: 'switch-brain', provider: sw[1] === 'claude' ? 'claude' : sw[1].includes('local') ? 'local' : 'codex' }
+  const sw = lower.match(/^(?:switch to|use)\s+(codex|gpt|claude|gemini|local|the local model)(?:\s+(?:for chat|as (?:the )?brain))?$/)
+  if (sw) return { type: 'switch-brain', provider: sw[1] === 'claude' ? 'claude' : sw[1] === 'gemini' ? 'gemini' : sw[1].includes('local') ? 'local' : 'codex' }
 
   if (/^(new (conversation|chat)|start over|fresh (context|start))$/.test(lower)) return { type: 'new-conversation' }
 
@@ -132,4 +132,16 @@ export function matchProject(fragment: string, projects: string[]): string | und
     const pl = p.toLowerCase()
     return pl.startsWith(f) || f.startsWith(pl) || pl.split(/[\s-_]+/)[0] === f.split(' ')[0]
   })
+}
+
+/**
+ * Does answering this need Anuj's vault? General questions ("best AI news",
+ * "what is a pointer") get only a tiny identity line; questions about Anuj,
+ * his projects, schedule, work or past decisions pull from memory.
+ */
+export function needsMemory(text: string, projects: string[] = []): boolean {
+  const t = text.toLowerCase()
+  if (/\b(i|i'm|im|i've|ive|i'd|my|mine|myself|we|we're|our|anuj)\b|\babout me\b/.test(t)) return true
+  if (/\b(remember|remind|decided|decision|last time|yesterday|earlier|again|schedule|calendar|deadline|due|assignment|class|course|exam|internship|job|resume|application|recruit|manager|coworker|team)\b/.test(t)) return true
+  return projects.some((p) => t.includes(p.toLowerCase()))
 }

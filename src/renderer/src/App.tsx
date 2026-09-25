@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentTask, ModelChoice, OrbMode, Settings, Turn, VoiceHealth } from '../../core/types'
 import { Search } from './components/icons'
-import { useUsage } from './components/Usage'
+import { UsageChips, useUsage } from './components/Usage'
 import { AccountMenu, AttentionMenu, ModelMenu } from './components/HeaderMenus'
 import { Orb } from './orb/Orb'
 import { Listener, Speaker } from './voice'
@@ -80,6 +80,9 @@ export function App() {
       api.on('window:mode', (m) => setWinMode(m as 'compact' | 'expanded')),
       api.on('speak', (_id, text) => {
         if (voiceRef.current.state === 'ready') void speaker.speak(text as string).catch(() => setNotice('Speech failed. Replies stay on screen.'))
+      }),
+      api.on('speak-chunk', (id, text) => {
+        if (voiceRef.current.state === 'ready') void speaker.append(id as string, text as string).catch(() => setNotice('Speech failed. Replies stay on screen.'))
       }),
       api.on('speech:stop', () => speaker.stop()),
       api.on('hotkey:talk', () => toggleListen()),
@@ -189,10 +192,7 @@ export function App() {
   return (
     <div className="shell" data-empty={empty}>
       <header className="header glass">
-        <div className="wordmark">
-          <i />
-          bluevis
-        </div>
+        <div className="wordmark">bluevis</div>
         <nav className="nav" aria-label="Sections">
           {(['talk', 'agents', 'relays', 'memory'] as const).map((v) => (
             <button key={v} aria-current={view === v ? 'page' : undefined} onClick={() => setView(v)}>
@@ -209,6 +209,7 @@ export function App() {
               {ctx.activeProject}
             </button>
           )}
+          <UsageChips usage={{ codex: usage.codex, claude: null }} onOpen={() => setView('settings')} />
           <ModelMenu settings={settings} label={ctx.brainLabel} usage={usage} onChange={setSettings} />
           <button
             className="icon-btn"

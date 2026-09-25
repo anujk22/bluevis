@@ -231,3 +231,45 @@ describe('notes', () => {
     expect(rank('the', notes)).toEqual([])
   })
 })
+
+import { SpeechStream } from '../src/core/reply'
+
+describe('speech stream', () => {
+  it('speaks sentences as they complete and stops at the separator', () => {
+    const out: string[] = []
+    const s = new SpeechStream((x) => out.push(x))
+    s.feed('Your test')
+    expect(out).toEqual([])
+    s.feed('Your test is failing. The price is')
+    expect(out).toEqual(['Your test is failing.'])
+    s.feed('Your test is failing. The price is null.\n---\n- detail one. more.')
+    expect(out).toEqual(['Your test is failing.', 'The price is null.'])
+    s.finish('Your test is failing. The price is null.')
+    expect(out).toHaveLength(2)
+  })
+
+  it('caps at three sentences without a separator and never speaks directives', () => {
+    const out: string[] = []
+    const s = new SpeechStream((x) => out.push(x))
+    s.feed('One. Two. Three. Four. Five. Six')
+    expect(out).toEqual(['One.', 'Two.', 'Three.'])
+    const t = new SpeechStream((x) => out.push(x))
+    out.length = 0
+    t.feed('Done.\nMEMORY: {"kind":"fact"}\n')
+    t.finish('Done.')
+    expect(out).toEqual(['Done.'])
+  })
+})
+
+import { needsMemory } from '../src/core/router'
+
+describe('memory gate', () => {
+  it('skips the vault for general questions', () => {
+    for (const q of ["what's the best AI news this week?", 'what is a pointer in C', 'tell me a joke', 'summarize transformers']) expect(needsMemory(q)).toBe(false)
+  })
+  it('uses the vault for personal, schedule, work and project questions', () => {
+    for (const q of ['what did I decide about pricing', 'any assignments due', 'help me write to my manager', 'how are we doing on it'])
+      expect(needsMemory(q)).toBe(true)
+    expect(needsMemory('ideas for Yonder monetization', ['Yonder'])).toBe(true)
+  })
+})

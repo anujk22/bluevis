@@ -4,6 +4,7 @@ import { UsageDetail, type UsageState } from '../components/Usage'
 
 const CODEX_MODELS = ['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra', 'gpt-5.6-luna']
 const CLAUDE_MODELS = ['haiku', 'sonnet', 'opus']
+const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.8-pro']
 interface VoiceOption {
   id: string
   name: string
@@ -133,7 +134,7 @@ function Calendars({ settings, save }: { settings: Settings; save: (p: Partial<S
 }
 
 function ModelPicker({ value, onChange, localModels, allowLocal = true }: { value: ModelChoice; onChange: (c: ModelChoice) => void; localModels: string[]; allowLocal?: boolean }) {
-  const models = value.provider === 'codex' ? CODEX_MODELS : value.provider === 'claude' ? CLAUDE_MODELS : localModels
+  const models = value.provider === 'codex' ? CODEX_MODELS : value.provider === 'claude' ? CLAUDE_MODELS : value.provider === 'gemini' ? GEMINI_MODELS : localModels
   return (
     <div className="ctrl">
       <select
@@ -142,11 +143,20 @@ function ModelPicker({ value, onChange, localModels, allowLocal = true }: { valu
         aria-label="Provider"
         onChange={(e) => {
           const p = e.target.value as ModelChoice['provider']
-          onChange(p === 'codex' ? { provider: 'codex', model: 'gpt-6-luna', effort: 'low' } : p === 'claude' ? { provider: 'claude', model: 'haiku' } : { provider: 'local', model: localModels[0] ?? '' })
+          onChange(
+            p === 'codex'
+              ? { provider: 'codex', model: 'gpt-6-luna', effort: 'low' }
+              : p === 'claude'
+                ? { provider: 'claude', model: 'haiku' }
+                : p === 'gemini'
+                  ? { provider: 'gemini', model: 'gemini-3.8-flash' }
+                  : { provider: 'local', model: localModels[0] ?? '' }
+          )
         }}
       >
         <option value="codex">Codex</option>
         <option value="claude">Claude</option>
+        {allowLocal && <option value="gemini">Gemini</option>}
         {allowLocal && <option value="local">Local (mlx-serve)</option>}
       </select>
       <select className="select" value={value.model} aria-label="Model" onChange={(e) => onChange({ ...value, model: e.target.value })}>
@@ -157,7 +167,7 @@ function ModelPicker({ value, onChange, localModels, allowLocal = true }: { valu
           </option>
         ))}
       </select>
-      {value.provider !== 'local' && (
+      {(value.provider === 'codex' || value.provider === 'claude') && (
         <select className="select" value={value.effort ?? 'medium'} aria-label="Reasoning effort" onChange={(e) => onChange({ ...value, effort: e.target.value as ModelChoice['effort'] })}>
           {['minimal', 'low', 'medium', 'high'].map((e) => (
             <option key={e} value={e}>

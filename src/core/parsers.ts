@@ -163,6 +163,30 @@ function claudeToolUse(block: any): AgentEvent {
   return { kind: 'tool', id: block.id, name: block.name, detail, status: 'running' }
 }
 
+/** Parse one line of `gemini -p … -o stream-json` output. */
+export function parseGeminiLine(line: string): AgentEvent[] {
+  const d = safeJson(line)
+  if (!d) return []
+  switch (d.type) {
+    case 'init':
+      return d.session_id ? [{ kind: 'session', id: d.session_id }] : []
+    case 'message':
+      if (d.role !== 'assistant' || typeof d.content !== 'string') return []
+      return d.delta ? [{ kind: 'text-delta', text: d.content }] : [{ kind: 'message', text: d.content }]
+    case 'tool_use':
+      return [{ kind: 'tool', id: d.tool_id ?? d.tool_name, name: d.tool_name ?? 'tool', detail: d.parameters?.query ?? d.parameters?.file_path ?? d.parameters?.url, status: 'running' }]
+    case 'tool_result':
+      return [{ kind: 'tool', id: d.tool_id ?? '', name: '', status: d.status === 'error' ? 'failed' : 'done' }]
+    case 'error':
+      return d.severity === 'warning' ? [{ kind: 'warning', message: d.message ?? '' }] : [{ kind: 'error', message: d.message ?? 'Gemini error' }]
+    case 'result':
+      if (d.status && d.status !== 'success') return [{ kind: 'error', message: d.error?.message ?? `Gemini run ${d.status}` }]
+      return [{ kind: 'usage', input: d.stats?.input_tokens ?? 0, output: d.stats?.output_tokens ?? 0 }, { kind: 'done' }]
+    default:
+      return []
+  }
+}
+
 /** Parse one SSE line from an OpenAI-compatible /chat/completions stream. */
 export function parseOpenAISSELine(line: string): AgentEvent[] {
   const t = line.trim()

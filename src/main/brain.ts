@@ -2,8 +2,8 @@ import { app } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseReply, type MemoryWrite } from '../core/reply'
-import { matchProject, route, type Intent } from '../core/router'
+import { parseReply, SpeechStream, type MemoryWrite } from '../core/reply'
+import { matchProject, needsMemory, route, type Intent } from '../core/router'
 import type { RelayRun } from '../core/relay'
 import type { AgentTask, ModelChoice, Project, Settings, Turn, TurnAction } from '../core/types'
 import { PERSONA, RESUME_PROMPT, SESSION_PROMPT } from './persona'
@@ -21,6 +21,8 @@ export interface BrainEvents {
   reset: () => void
   busy: (busy: boolean) => void
   speak: (turnId: string, text: string) => void
+  /** One more sentence for the reply currently being spoken (streaming speech). */
+  speakChunk: (turnId: string, sentence: string) => void
   stopSpeech: () => void
   context: (c: { activeProject?: string; brain: ModelChoice }) => void
   settings: (s: Settings) => void
@@ -35,9 +37,12 @@ const GMAIL_WRITE = GMAIL([
   'mark_message_spam', 'mark_thread_spam', 'unmark_message_spam', 'unmark_thread_spam', 'apply_sensitive_message_label', 'apply_sensitive_thread_label'
 ])
 
+const IDENTITY = "You're talking with Anuj Kakumanu, a Rutgers CS sophomore and product-minded builder. Be direct and concise, no em dashes. (No personal notes were loaded for this question.)"
+
 const BRAIN_DEFAULTS: Record<ModelChoice['provider'], ModelChoice> = {
   codex: { provider: 'codex', model: 'gpt-6-luna', effort: 'low' },
   claude: { provider: 'claude', model: 'haiku' },
+  gemini: { provider: 'gemini', model: 'gemini-3.8-flash' },
   local: { provider: 'local', model: '' }
 }
 
@@ -223,8 +228,12 @@ export class Brain {
     const s = getSettings()
     const choice = s.brain
     const allowPrivate = choice.provider === 'local'
-    const { text: knowledge, used } = await this.vault.context(text, { allowPrivate, project: this.activeProject?.name })
+    // General questions get a one-line identity; the vault is only consulted when the question is about Anuj's life or work.
     const projects = await this.projects()
+    const personal = needsMemory(text, projects.map((p) => p.name)) || !!screenshot
+    const { text: knowledge, used } = personal
+      ? await this.vault.context(text, { allowPrivate, project: this.activeProject?.name })
+      : { text: IDENTITY, used: [] }
     const running = this.tasks.active()
     const env = [
       `Now: ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'full', timeStyle: 'short' })} (America/New_York)`,
@@ -241,12 +250,14 @@ export class Brain {
 
     const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: label(choice), sources: used })
     this.ev.busy(true)
+    const speech = new SpeechStream((sentence) => this.ev.speakChunk(turn.id, sentence))
     try {
       const raw = await this.runBrain(prompt, {
         images: screenshot ? [screenshot] : undefined,
         onDelta: (partial) => {
           turn.text = parseReply(partial).shown
           this.update(turn)
+          speech.feed(partial)
         }
       })
       const reply = parseReply(raw)
@@ -254,7 +265,7 @@ export class Brain {
       turn.spoken = reply.spoken
       turn.pending = false
       this.update(turn)
-      if (reply.spoken) this.ev.speak(turn.id, reply.spoken)
+      speech.finish(reply.spoken)
       for (const a of reply.actions) this.push({ speaker: 'system', text: '', action: { kind: 'delegate', agent: a.agent, project: a.project, prompt: a.prompt, state: 'proposed' } })
       for (const m of reply.memories) await this.remember(m, 'inferred from conversation', false, true)
     } catch (e) {
@@ -540,6 +551,7 @@ ${note}
 export function label(c: ModelChoice): string {
   if (c.provider === 'codex') return c.model.replace(/^gpt-/, 'GPT-').replace(/-(\w)/g, (_, x: string) => `-${x.toUpperCase()}`)
   if (c.provider === 'claude') return `Claude ${c.model[0].toUpperCase()}${c.model.slice(1)}`
+  if (c.provider === 'gemini') return c.model.replace(/^gemini-/, 'Gemini ').replace(/-(\w)/g, (_, x: string) => ` ${x.toUpperCase()}`)
   return c.model ? c.model.split('/').pop()!.slice(0, 24) : 'Local model'
 }
 

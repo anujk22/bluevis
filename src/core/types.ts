@@ -1,6 +1,6 @@
 // Shared types between the main process, preload bridge and renderer.
 
-export type ProviderId = 'codex' | 'claude' | 'local'
+export type ProviderId = 'codex' | 'claude' | 'gemini' | 'local'
 
 export interface ModelChoice {
   provider: ProviderId

@@ -33,6 +33,8 @@ function Popover({ button, children, align = 'right', label }: { button: (open: 
 }
 
 const MODELS: { label: string; choice: ModelChoice; note: string }[] = [
+  { label: 'Gemini 3.8 Flash', choice: { provider: 'gemini', model: 'gemini-3.8-flash' }, note: 'Gemini · fast, streams' },
+  { label: 'Gemini 3.8 Pro', choice: { provider: 'gemini', model: 'gemini-3.8-pro' }, note: 'Gemini · deeper' },
   { label: 'GPT-6-Luna', choice: { provider: 'codex', model: 'gpt-6-luna', effort: 'low' }, note: 'Codex · fast' },
   { label: 'GPT-6-Sol', choice: { provider: 'codex', model: 'gpt-6-sol', effort: 'low' }, note: 'Codex · balanced' },
   { label: 'GPT-6-Astra', choice: { provider: 'codex', model: 'gpt-6-astra', effort: 'medium' }, note: 'Codex · deepest' },

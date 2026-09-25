@@ -119,8 +119,9 @@ function concat(chunks: Float32Array[]): Float32Array {
 }
 
 /**
- * Sentence-pipelined speech: synthesizes chunk n+1 while chunk n plays, so the
- * first words start quickly. `level` follows the audio actually playing.
+ * Queue-based speech. Sentences can keep arriving while earlier ones play
+ * (streaming replies); the next sentence is synthesized while the current one
+ * plays. `level` follows the audio actually playing.
  */
 export class Speaker {
   private ctx = new AudioContext()
@@ -128,6 +129,9 @@ export class Speaker {
   private data = new Uint8Array(512)
   private generation = 0
   private source: AudioBufferSourceNode | null = null
+  private queue: string[] = []
+  private owner: string | null = null
+  private pumping = false
   speaking = false
   onChange: (speaking: boolean) => void = () => {}
 
@@ -147,26 +151,49 @@ export class Speaker {
     return Math.min(1, Math.sqrt(sum / this.data.length) * 5)
   }
 
-  async speak(text: string): Promise<void> {
+  /** Replace whatever is playing with this text. */
+  speak(text: string): Promise<void> {
     this.stop()
-    const gen = ++this.generation
-    const chunks = chunk(splitSentences(text))
-    if (!chunks.length) return
+    return this.append(`solo-${this.generation}`, text)
+  }
+
+  /** Add text for a reply; a different reply id interrupts the current one. */
+  append(id: string, text: string): Promise<void> {
+    if (id !== this.owner) {
+      this.stop()
+      this.owner = id
+    }
+    this.queue.push(...chunk(splitSentences(text)))
+    return this.pumping ? Promise.resolve() : this.pump()
+  }
+
+  private async pump() {
+    const gen = this.generation
+    this.pumping = true
     await this.ctx.resume()
     this.set(true)
-    let next = this.synth(chunks[0])
     try {
-      for (let i = 0; i < chunks.length; i++) {
+      let next = this.queue.length ? this.synth(this.queue.shift()!) : null
+      while (next) {
         const wav = await next
         if (gen !== this.generation) return
-        if (i + 1 < chunks.length) next = this.synth(chunks[i + 1])
+        // Start synthesizing the following sentence while this one plays.
+        next = this.queue.length ? this.synth(this.queue.shift()!) : null
         const audio = await this.ctx.decodeAudioData(wav.slice(0))
         if (gen !== this.generation) return
         await this.play(audio)
         if (gen !== this.generation) return
+        // A streaming reply may still be producing sentences; wait briefly for more.
+        for (let i = 0; !next && i < 8; i++) {
+          await new Promise((r) => setTimeout(r, 60))
+          if (this.queue.length) next = this.synth(this.queue.shift()!)
+        }
       }
     } finally {
-      if (gen === this.generation) this.set(false)
+      if (gen === this.generation) {
+        this.pumping = false
+        this.set(false)
+      }
     }
   }
 
@@ -184,6 +211,9 @@ export class Speaker {
   /** Stops audio only. It never cancels or undoes work. */
   stop() {
     this.generation++
+    this.queue = []
+    this.owner = null
+    this.pumping = false
     try {
       this.source?.stop()
     } catch {

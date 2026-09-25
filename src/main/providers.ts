@@ -2,7 +2,7 @@ import type { ChildProcess } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseClaudeLine, parseCodexLine, parseOpenAISSELine, LineBuffer } from '../core/parsers'
+import { parseClaudeLine, parseCodexLine, parseGeminiLine, parseOpenAISSELine, LineBuffer } from '../core/parsers'
 import type { AgentEvent, ModelChoice, ProviderHealth } from '../core/types'
 import { run, spawnLines } from './shell'
 
@@ -42,6 +42,7 @@ export function onRateLimits(fn: (raw: unknown) => void) {
 export function runProvider(o: RunOptions): RunHandle {
   if (o.choice.provider === 'codex') return runCodex(o)
   if (o.choice.provider === 'claude') return runClaude(o)
+  if (o.choice.provider === 'gemini') return runGemini(o)
   return runLocal(o)
 }
 
@@ -134,6 +135,14 @@ function runClaude(o: RunOptions): RunHandle {
   return cliRun('claude', args, o, parseClaudeLine, prompt)
 }
 
+function runGemini(o: RunOptions): RunHandle {
+  // Headless Gemini CLI: prompt on stdin, streamed JSON events, read-only plan mode.
+  const args = ['-m', o.choice.model, '-o', 'stream-json', '--approval-mode', 'plan', '-p', '']
+  if (o.sessionId) args.push('--resume', o.sessionId)
+  const prompt = o.system && !o.sessionId ? `<instructions>\n${o.system}\n</instructions>\n\n${o.prompt}` : o.prompt
+  return cliRun('gemini', args, o, parseGeminiLine, prompt)
+}
+
 function runLocal(o: RunOptions): RunHandle {
   const controller = new AbortController()
   const base = (o.localBaseUrl ?? '').replace(/\/$/, '')
@@ -176,9 +185,10 @@ function runLocal(o: RunOptions): RunHandle {
 }
 
 export async function providerHealth(localBaseUrl: string): Promise<ProviderHealth[]> {
-  const [codex, claude, local] = await Promise.all([
+  const [codex, claude, gemini, local] = await Promise.all([
     run('codex', ['--version'], { timeout: 8000 }),
     run('claude', ['--version'], { timeout: 8000 }),
+    run('gemini', ['--version'], { timeout: 8000 }),
     fetch(`${localBaseUrl.replace(/\/$/, '')}/models`, { signal: AbortSignal.timeout(1500) })
       .then(async (r) => (r.ok ? ((await r.json()) as { data?: { id: string }[] }) : null))
       .catch(() => null)
@@ -186,6 +196,7 @@ export async function providerHealth(localBaseUrl: string): Promise<ProviderHeal
   return [
     { provider: 'codex', ok: codex.code === 0, detail: codex.code === 0 ? codex.stdout.trim() : 'codex CLI not found' },
     { provider: 'claude', ok: claude.code === 0, detail: claude.code === 0 ? claude.stdout.trim() : 'claude CLI not found' },
+    { provider: 'gemini', ok: gemini.code === 0, detail: gemini.code === 0 ? `gemini-cli ${gemini.stdout.trim()}` : 'gemini CLI not found' },
     {
       provider: 'local',
       ok: !!local,
