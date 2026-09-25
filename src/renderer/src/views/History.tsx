@@ -9,7 +9,9 @@ const LIVE = new Set(['starting', 'investigating', 'editing', 'testing', 'awaiti
 const PAGE = 200
 
 /** Past Codex and Claude Code threads, readable and continuable without leaving Bluevis. */
-export function History({ tasks }: { tasks: AgentTask[] }) {
+type OpenTerminal = (provider: 'codex' | 'claude', id: string, cwd: string, title: string) => void
+
+export function History({ tasks, onOpenTerminal }: { tasks: AgentTask[]; onOpenTerminal: OpenTerminal }) {
   const api = window.bluevis
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null)
   const [filter, setFilter] = useState<'all' | 'codex' | 'claude'>('all')
@@ -51,7 +53,7 @@ export function History({ tasks }: { tasks: AgentTask[] }) {
         ))}
         {threads && !shown.length && <p className="panel-sub">No threads match.</p>}
       </aside>
-      <section className="panel thread-pane">{selected ? <Thread key={selected.file} thread={selected} tasks={tasks} onChanged={load} /> : <Empty />}</section>
+      <section className="panel thread-pane">{selected ? <Thread key={selected.file} thread={selected} tasks={tasks} onChanged={load} onOpenTerminal={onOpenTerminal} /> : <Empty />}</section>
     </div>
   )
 }
@@ -69,7 +71,7 @@ function Empty() {
   )
 }
 
-function Thread({ thread, tasks, onChanged }: { thread: ThreadSummary; tasks: AgentTask[]; onChanged: () => void }) {
+function Thread({ thread, tasks, onChanged, onOpenTerminal }: { thread: ThreadSummary; tasks: AgentTask[]; onChanged: () => void; onOpenTerminal: OpenTerminal }) {
   const api = window.bluevis
   const [items, setItems] = useState<ThreadItem[] | null>(null)
   const [limit, setLimit] = useState(PAGE)
@@ -121,6 +123,9 @@ function Thread({ thread, tasks, onChanged }: { thread: ThreadSummary; tasks: Ag
           </div>
           <h2>{thread.title}</h2>
         </div>
+        <button className="btn" disabled={live} onClick={() => onOpenTerminal(thread.provider, thread.id, thread.cwd, thread.title)} title={`Opens ${thread.provider === 'codex' ? 'codex resume' : 'claude --resume'} in a Work terminal`}>
+          Open in terminal
+        </button>
       </header>
       <div className="thread-body" ref={scroller}>
         {items && items.length > limit && (

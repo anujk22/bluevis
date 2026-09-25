@@ -2697,6 +2697,12 @@ kbd {
   flex: 1;
 }
 
+.thread-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
 .thread-head h2 {
   font-family: var(--serif);
   font-weight: 400;
@@ -2810,4 +2816,92 @@ kbd {
 .th-assistant pre {
   max-width: 100%;
   overflow-x: auto;
+}
+
+/* ————— Work terminals ————— */
+
+.side-head {
+  margin: 18px 0 10px;
+}
+
+.new-term {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.new-term .select {
+  flex: 1;
+  min-width: 0;
+}
+
+.term-area {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+
+.term-area[data-split='true'] {
+  grid-template-columns: 1fr 1fr;
+}
+
+.term-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(6, 7, 9, 0.72);
+  box-shadow: var(--glass-edge);
+  overflow: hidden;
+}
+
+.term-pane:focus-within {
+  border-color: rgb(from var(--periwinkle) r g b / 0.4);
+}
+
+.term-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+
+.term-head .t {
+  font-size: 13px;
+  color: var(--bone);
+  white-space: nowrap;
+}
+
+.term-head .cwd {
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.term-head .exited {
+  color: var(--amber);
+}
+
+.term-body {
+  flex: 1;
+  min-height: 0;
+  padding: 8px 4px 4px 12px;
+  user-select: text;
+}
+
+.xterm-host,
+.xterm-host .xterm {
+  height: 100%;
+}
+
+.xterm-host .xterm-viewport {
+  background: transparent !important;
 }

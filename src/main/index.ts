@@ -7,6 +7,7 @@ import { Importer } from './importer'
 import { RelayManager } from './relay'
 import { discoverProjects } from './projects'
 import { HistoryService } from './history'
+import { TerminalManager } from './terminals'
 import { onRateLimits, providerHealth } from './providers'
 import { UsageService } from './usage'
 import { getSecret, setSecret } from './secrets'
@@ -196,6 +197,17 @@ app.whenReady().then(async () => {
   ipcMain.handle('action:dismiss', (_e, id: string) => brain.dismissAction(id))
   ipcMain.handle('memory:undo', (_e, id: string) => brain.undoMemory(id))
   ipcMain.handle('tasks:list', () => tasks.list())
+  const terminals = new TerminalManager(send)
+  brain.terminals = terminals
+  ipcMain.handle('term:create', (_e, o: { cwd?: string; title?: string; command?: string; cols?: number; rows?: number }) => terminals.create(o))
+  ipcMain.handle('term:list', () => terminals.list())
+  ipcMain.handle('term:replay', (_e, id: string) => terminals.replay(id))
+  ipcMain.on('term:write', (_e, id: string, data: string) => terminals.write(id, data))
+  ipcMain.on('term:resize', (_e, id: string, cols: number, rows: number) => terminals.resize(id, cols, rows))
+  ipcMain.on('term:focus', (_e, id: string | null) => terminals.focus(id))
+  ipcMain.handle('term:kill', (_e, id: string) => terminals.kill(id))
+  app.on('will-quit', () => terminals.killAll())
+
   const history = new HistoryService()
   ipcMain.handle('history:list', () => history.list())
   ipcMain.handle('history:read', (_e, file: string) => history.read(file))

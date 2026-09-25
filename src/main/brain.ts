@@ -9,6 +9,8 @@ import type { AgentTask, ModelChoice, Project, Settings, Turn, TurnAction } from
 import { PERSONA, RESUME_PROMPT, SESSION_PROMPT } from './persona'
 import { agendaText } from './calendar'
 import { canvasBrief } from './canvas'
+import type { TerminalManager } from './terminals'
+import { asksAboutTerminal } from '../core/terminal'
 import { discoverProjects } from './projects'
 import { runProvider, localModels, type RunHandle } from './providers'
 import { getSettings, updateSettings } from './settings'
@@ -55,6 +57,7 @@ export class Brain {
   private activeProject?: Project
   private workspace = join(app.getPath('userData'), 'workspace')
   relays!: RelayManager
+  terminals?: TerminalManager
 
   constructor(
     private vault: Vault,
@@ -121,7 +124,7 @@ export class Brain {
   private async dispatch(intent: Intent, projects: Project[], opts: { via: 'voice' | 'text'; screenshot?: string }) {
     switch (intent.type) {
       case 'chat':
-        return this.chat(intent.text, opts.screenshot)
+        return this.chat(intent.text, opts.screenshot, this.terminalBlock(intent.text))
       case 'delegate':
         return this.delegate({ kind: 'delegate', agent: intent.agent, model: intent.model, project: intent.project, prompt: intent.prompt, state: 'proposed' }, projects, true)
       case 'open':
@@ -359,6 +362,13 @@ Anuj: ${text}`
     }
   }
 
+  /** The focused Work terminal's recent output, when the request is about it (and, for agents, in the same project). */
+  private terminalBlock(text: string, within?: string): string {
+    const t = asksAboutTerminal(text) ? this.terminals?.focusedTail() : null
+    if (!t || (within && !t.cwd.startsWith(within))) return ''
+    return `\n\n<terminal title="${t.title}" cwd="${t.cwd}" note="recent output of the terminal Anuj is looking at in Bluevis; credentials masked">\n${t.text}\n</terminal>`
+  }
+
   /** Start (or ask about) a delegated agent task. */
   async delegate(action: TurnAction, projects?: Project[], explicit = false, turnId?: string) {
     projects ??= await this.projects()
@@ -373,7 +383,7 @@ Anuj: ${text}`
       action.agent === 'claude'
         ? { provider: 'claude', model: action.model ?? 'opus' }
         : { provider: 'codex', model: action.model ?? (s.worker.provider === 'codex' ? s.worker.model : 'gpt-6-sol'), effort: s.worker.effort ?? 'medium' }
-    const brief = await this.handoffBrief(project, action.prompt, choice)
+    const brief = (await this.handoffBrief(project, action.prompt, choice)) + this.terminalBlock(action.prompt, project.path)
     const title = action.prompt.charAt(0).toUpperCase() + action.prompt.slice(1, 90)
     const task = this.tasks.start({ title, prompt: brief, choice, cwd: project.path, project: project.name })
     if (turnId) {

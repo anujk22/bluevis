@@ -11,13 +11,14 @@ import { Memory } from './views/Memory'
 import { SettingsView } from './views/Settings'
 import { Relays } from './views/Relays'
 import { History } from './views/History'
+import type { TerminalInfo } from '../../core/terminal'
 import type { RelayRun } from '../../core/relay'
 import { BASE_HUE, DEFAULT_ACCENT } from '../../core/color'
 
 export type View = 'talk' | 'agents' | 'history' | 'relays' | 'memory' | 'settings'
 const NAV: [View, string][] = [
   ['talk', 'Talk'],
-  ['agents', 'Agents'],
+  ['agents', 'Work'],
   ['history', 'History'],
   ['relays', 'Relays'],
   ['memory', 'Memory']
@@ -49,6 +50,8 @@ export function App() {
   const [shot, setShot] = useState<Shot | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [focusTask, setFocusTask] = useState<string | null>(null)
+  const [terms, setTerms] = useState<TerminalInfo[]>([])
+  const [termFocus, setTermFocus] = useState<string | null>(null)
   const usage = useUsage()
   const [searchFocus, setSearchFocus] = useState(0)
   const [relays, setRelays] = useState<Record<string, RelayRun>>({})
@@ -73,6 +76,7 @@ export function App() {
     void api.chat.context().then((c) => setCtx(c as Ctx))
     void api.relays.list().then((l) => setRelays(Object.fromEntries((l as RelayRun[]).map((r) => [r.id, r]))))
     void api.settings.get().then((s) => setSettings(s as Settings))
+    void api.terminals.list().then((l) => setTerms(l as TerminalInfo[]))
     void api.voice.health().then((h) => setVoice(h as VoiceHealth))
     void api.window.getMode().then((m) => setWinMode(m as 'compact' | 'expanded'))
     const offs = [
@@ -92,6 +96,7 @@ export function App() {
       api.on('task', (t) => setTasks((prev) => ({ ...prev, [(t as AgentTask).id]: t as AgentTask }))),
       api.on('context', (c) => setCtx(c as Ctx)),
       api.on('settings', (s) => setSettings(s as Settings)),
+      api.on('term:list', (l) => setTerms(l as TerminalInfo[])),
       api.on('voice:health', (h) => setVoice(h as VoiceHealth)),
       api.on('window:mode', (m) => setWinMode(m as 'compact' | 'expanded')),
       api.on('speak', (_id, text) => {
@@ -204,6 +209,14 @@ export function App() {
     )
   }
 
+  /** Continue a Codex or Claude thread interactively in a Work terminal. */
+  const openResume = async (provider: 'codex' | 'claude', id: string, cwd: string, title: string) => {
+    const command = provider === 'codex' ? `codex resume ${id}` : `claude --resume ${id}`
+    const t = (await api.terminals.create({ cwd, title, command })) as TerminalInfo
+    setTermFocus(t.id)
+    setView('agents')
+  }
+
   const empty = view === 'talk' && turns.length === 0
   return (
     <div className="shell" data-empty={empty}>
@@ -290,8 +303,19 @@ export function App() {
             }}
           />
         )}
-        {view === 'history' && <History tasks={taskList} />}
-        {view === 'agents' && <Agents tasks={taskList} focus={focusTask} onFocus={setFocusTask} settings={settings} />}
+        {view === 'history' && <History tasks={taskList} onOpenTerminal={openResume} />}
+        {view === 'agents' && (
+          <Agents
+            tasks={taskList}
+            focus={focusTask}
+            onFocus={setFocusTask}
+            settings={settings}
+            terms={terms}
+            termFocus={termFocus}
+            onTermFocus={setTermFocus}
+            onTakeOver={(t) => t.sessionId && openResume(t.choice.provider as 'codex' | 'claude', t.sessionId, t.cwd, t.title)}
+          />
+        )}
         {view === 'relays' && <Relays runs={relayList} focus={focusRelay} onFocus={setFocusRelay} />}
         {view === 'memory' && <Memory searchFocus={searchFocus} />}
         {view === 'settings' && settings && <SettingsView settings={settings} voice={voice} usage={usage} onChange={setSettings} />}
