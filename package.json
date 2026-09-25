@@ -1,0 +1,70 @@
+{
+  "name": "bluevis",
+  "productName": "Bluevis",
+  "version": "0.1.0",
+  "description": "A personal AI operating layer for macOS: a living orb, local voice, coding-agent coordination, and an Obsidian-compatible memory.",
+  "private": true,
+  "main": "out/main/index.js",
+  "author": "Anuj Kakumanu",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && npm run build",
+    "dist": "npm run build && electron-builder --mac dmg --publish never"
+  },
+  "dependencies": {
+    "@fontsource/instrument-sans": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
+    "@fontsource/martian-mono": "^5.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6",
+    "vitest": "^5.0.1"
+  },
+  "build": {
+    "appId": "dev.anujk.bluevis",
+    "productName": "Bluevis",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "voice",
+        "to": "voice"
+      },
+      {
+        "from": "vault-template",
+        "to": "vault-template"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Bluevis listens when you hold the talk key.",
+        "NSScreenCaptureUsageDescription": "Bluevis looks at your screen only when you ask it to."
+      }
+    }
+  }
+}

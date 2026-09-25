@@ -1,0 +1,183 @@
+import { app, BrowserWindow, globalShortcut, ipcMain, screen, session, shell, systemPreferences } from 'electron'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import type { Settings } from '../core/types'
+import { Brain, label } from './brain'
+import { discoverProjects } from './projects'
+import { providerHealth } from './providers'
+import { getSettings, updateSettings } from './settings'
+import { adoptLoginShellPath, run } from './shell'
+import { TaskManager } from './tasks'
+import { Vault } from './vault'
+import { VoiceService } from './voice'
+
+type Mode = 'compact' | 'expanded'
+
+let win: BrowserWindow | null = null
+let mode: Mode = 'expanded'
+const send = (channel: string, ...args: unknown[]) => win?.webContents.send(channel, ...args)
+
+function boundsFor(m: Mode) {
+  const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  if (m === 'compact') {
+    const size = 184
+    return { width: size, height: size, x: workArea.x + workArea.width - size - 20, y: workArea.y + workArea.height - size - 20 }
+  }
+  const width = Math.min(1280, workArea.width - 80)
+  const height = Math.min(820, workArea.height - 60)
+  return { width, height, x: Math.round(workArea.x + (workArea.width - width) / 2), y: Math.round(workArea.y + (workArea.height - height) / 2) }
+}
+
+function setMode(m: Mode, focus = true) {
+  if (!win) return
+  mode = m
+  send('window:mode', m)
+  win.setAlwaysOnTop(m === 'compact', 'floating')
+  win.setBounds(boundsFor(m), true)
+  win.setResizable(m === 'expanded')
+  if (!win.isVisible()) win.show()
+  if (focus && m === 'expanded') win.focus()
+}
+
+function createWindow() {
+  win = new BrowserWindow({
+    ...boundsFor('expanded'),
+    minWidth: 160,
+    minHeight: 160,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    show: false,
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: -100, y: -100 },
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, backgroundThrottling: false }
+  })
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  win.once('ready-to-show', () => win?.show())
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL)
+  else void win.loadFile(join(__dirname, '../renderer/index.html'))
+}
+
+/** Capture the main display without Bluevis in the shot. Returns the file path and a preview data URL. */
+async function captureScreen(): Promise<{ path: string; preview: string } | { error: string }> {
+  const path = join(app.getPath('temp'), `bluevis-screen-${Date.now()}.jpg`)
+  const wasVisible = win?.isVisible()
+  win?.setOpacity(0)
+  await new Promise((r) => setTimeout(r, 120))
+  const r = await run('screencapture', ['-x', '-m', '-t', 'jpg', path])
+  win?.setOpacity(1)
+  if (wasVisible === false) win?.hide()
+  if (r.code !== 0 || !existsSync(path)) {
+    return { error: 'Screen capture failed. Allow Bluevis under System Settings → Privacy & Security → Screen Recording.' }
+  }
+  const preview = `data:image/jpeg;base64,${readFileSync(path).toString('base64')}`
+  return { path, preview }
+}
+
+app.whenReady().then(async () => {
+  await adoptLoginShellPath()
+  const settings = getSettings()
+  const vault = new Vault(settings.vaultPath)
+  await vault.ensure()
+
+  const voice = new VoiceService((h) => send('voice:health', h))
+  let brain: Brain
+  const tasks = new TaskManager(
+    (t) => send('task', t),
+    (t) => brain.onTaskFinished(t)
+  )
+  brain = new Brain(vault, tasks, {
+    turn: (t) => send('turn', t),
+    reset: () => send('reset'),
+    busy: (b) => send('busy', b),
+    speak: (id, text) => getSettings().voice.speak && send('speak', id, text),
+    stopSpeech: () => send('speech:stop'),
+    context: (c) => send('context', { ...c, brainLabel: label(c.brain) }),
+    settings: (s) => send('settings', s)
+  })
+
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'))
+
+  ipcMain.handle('chat:send', (_e, text: string, opts: { via: 'voice' | 'text'; screenshot?: string }) => brain.handle(text, opts))
+  ipcMain.handle('chat:stop', () => brain.stop())
+  ipcMain.handle('chat:reset', () => brain.reset())
+  ipcMain.handle('chat:turns', () => brain.turns)
+  ipcMain.handle('chat:context', () => ({ ...brain.context(), brainLabel: label(brain.context().brain) }))
+  ipcMain.handle('action:approve', (_e, id: string, project?: string, prompt?: string) => brain.approveAction(id, project, prompt))
+  ipcMain.handle('action:dismiss', (_e, id: string) => brain.dismissAction(id))
+  ipcMain.handle('memory:undo', (_e, id: string) => brain.undoMemory(id))
+  ipcMain.handle('tasks:list', () => tasks.list())
+  ipcMain.handle('tasks:start', (_e, t: { agent: 'codex' | 'claude'; project: string; prompt: string }) =>
+    brain.delegate({ kind: 'delegate', agent: t.agent, project: t.project, prompt: t.prompt, state: 'proposed' }, undefined, true)
+  )
+  ipcMain.handle('tasks:stop', (_e, id: string) => tasks.stop(id))
+  ipcMain.handle('projects:list', (_e, force?: boolean) => discoverProjects(getSettings().projectRoots, force))
+  ipcMain.handle('project:activate', (_e, name?: string) => brain.setActiveProject(name))
+  ipcMain.handle('project:reveal', (_e, path: string) => shell.openPath(path))
+  ipcMain.handle('memory:atlas', () => vault.atlas())
+  ipcMain.handle('memory:revert', (_e, hash: string) => vault.undo(hash))
+  ipcMain.handle('memory:read', (_e, rel: string) => vault.read(rel))
+  ipcMain.handle('memory:open', async (_e, rel?: string) => {
+    const target = rel ? join(vault.root, rel) : vault.root
+    const obsidian = existsSync('/Applications/Obsidian.app')
+    if (obsidian) return shell.openExternal(`obsidian://open?path=${encodeURIComponent(target)}`)
+    return rel ? shell.openPath(target) : shell.openPath(vault.root)
+  })
+  ipcMain.handle('settings:get', () => getSettings())
+  ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
+    const s = updateSettings(patch)
+    send('context', { ...brain.context(), brainLabel: label(s.brain) })
+    return s
+  })
+  ipcMain.handle('providers:health', () => providerHealth(getSettings().localBaseUrl))
+  ipcMain.handle('voice:start', async () => {
+    await systemPreferences.askForMediaAccess('microphone').catch(() => false)
+    void voice.start()
+    return voice.health
+  })
+  ipcMain.handle('voice:stop', () => voice.stop())
+  ipcMain.handle('voice:health', () => voice.health)
+  ipcMain.handle('voice:stt', (_e, wav: ArrayBuffer) => voice.transcribe(wav))
+  ipcMain.handle('voice:tts', (_e, text: string) => voice.speak(text, getSettings().voice.ttsVoice, getSettings().voice.speed))
+  ipcMain.handle('window:mode', (_e, m: Mode) => setMode(m))
+  ipcMain.handle('window:get-mode', () => mode)
+  ipcMain.handle('window:hide', () => win?.hide())
+  ipcMain.handle('screen:capture', () => captureScreen())
+  ipcMain.handle('screen:discard', (_e, path: string) => {
+    if (path.startsWith(app.getPath('temp'))) rmSync(path, { force: true })
+  })
+
+  createWindow()
+
+  // ⌥Space summons or tucks away Bluevis. ⌥⇧Space talks. ⌥⇧L looks at the screen, then asks.
+  globalShortcut.register('Alt+Space', () => {
+    if (!win) return
+    if (!win.isVisible()) setMode('expanded')
+    else if (mode === 'compact') setMode('expanded')
+    else if (win.isFocused()) setMode('compact', false)
+    else win.focus()
+  })
+  globalShortcut.register('Alt+Shift+Space', () => {
+    if (!win?.isVisible()) win?.showInactive()
+    send('hotkey:talk')
+  })
+  globalShortcut.register('Alt+Shift+L', async () => {
+    const shot = await captureScreen()
+    setMode('expanded')
+    send('screen:attached', shot)
+  })
+
+  if (getSettings().voice.enabled) void voice.start()
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll()
+    voice.stop()
+    tasks.stopAll()
+  })
+})
+
+app.on('window-all-closed', () => app.quit())

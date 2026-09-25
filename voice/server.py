@@ -1,0 +1,120 @@
+# /// script
+# requires-python = ">=3.11,<3.13"
+# dependencies = ["mlx-audio>=0.2", "misaki[en]", "mlx-whisper", "soundfile", "numpy"]
+# ///
+"""Bluevis local voice sidecar.
+
+Speech-to-text with Whisper (MLX) and text-to-speech with Kokoro (MLX), served
+on localhost only. Models load lazily on first use (or via POST /warm) and stay
+resident. Started and stopped by the Electron main process.
+"""
+
+import io
+import json
+import os
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import numpy as np
+import soundfile as sf
+
+STT_MODEL = os.environ.get("BLUEVIS_STT_MODEL", "mlx-community/whisper-large-v3-turbo")
+TTS_MODEL = os.environ.get("BLUEVIS_TTS_MODEL", "mlx-community/Kokoro-82M-bf16")
+SAMPLE_RATE = 24000
+
+# MLX is not thread-safe; serialize all model work.
+lock = threading.Lock()
+state = {"tts": None, "stt_ready": False}
+
+
+def log(*args):
+    print("[voice]", *args, file=sys.stderr, flush=True)
+
+
+def get_tts():
+    if state["tts"] is None:
+        from mlx_audio.tts.utils import load_model
+
+        t = time.time()
+        state["tts"] = load_model(TTS_MODEL)
+        log(f"tts loaded in {time.time() - t:.1f}s")
+    return state["tts"]
+
+
+def transcribe(path):
+    import mlx_whisper
+
+    t = time.time()
+    result = mlx_whisper.transcribe(path, path_or_hf_repo=STT_MODEL, language="en")
+    state["stt_ready"] = True
+    log(f"stt {time.time() - t:.2f}s")
+    return result["text"].strip()
+
+
+def synthesize(text, voice, speed):
+    model = get_tts()
+    lang = "b" if voice.startswith("b") else "a"
+    chunks = [np.array(r.audio) for r in model.generate(text=text, voice=voice, speed=speed, lang_code=lang)]
+    audio = np.concatenate(chunks) if chunks else np.zeros(1, dtype=np.float32)
+    buf = io.BytesIO()
+    sf.write(buf, audio, SAMPLE_RATE, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
+
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *_):
+        pass
+
+    def reply(self, code, body, ctype="application/json"):
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def body(self):
+        return self.rfile.read(int(self.headers.get("Content-Length", 0)))
+
+    def do_GET(self):
+        if self.path == "/health":
+            return self.reply(200, {"ok": True, "tts": state["tts"] is not None, "stt": state["stt_ready"]})
+        self.reply(404, {"error": "not found"})
+
+    def do_POST(self):
+        try:
+            if self.path == "/stt":
+                data = self.body()
+                tmp = os.path.join(os.environ.get("TMPDIR", "/tmp"), f"bluevis-stt-{os.getpid()}.wav")
+                with open(tmp, "wb") as f:
+                    f.write(data)
+                with lock:
+                    text = transcribe(tmp)
+                return self.reply(200, {"text": text})
+            if self.path == "/tts":
+                req = json.loads(self.body() or b"{}")
+                with lock:
+                    wav = synthesize(req.get("text", ""), req.get("voice", "bm_george"), float(req.get("speed", 1.0)))
+                return self.reply(200, wav, "audio/wav")
+            if self.path == "/warm":
+                with lock:
+                    get_tts()
+                    synthesize("Ready.", "bm_george", 1.0)
+                    silent = os.path.join(os.environ.get("TMPDIR", "/tmp"), "bluevis-warm.wav")
+                    sf.write(silent, np.zeros(16000, dtype=np.float32), 16000)
+                    transcribe(silent)
+                return self.reply(200, {"ok": True})
+            self.reply(404, {"error": "not found"})
+        except Exception as e:  # surfaced to the UI as a voice error
+            log("error", repr(e))
+            self.reply(500, {"error": str(e)})
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("BLUEVIS_VOICE_PORT", "47821"))
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    log(f"listening on 127.0.0.1:{port}")
+    server.serve_forever()

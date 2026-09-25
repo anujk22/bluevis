@@ -1,0 +1,9 @@
+node_modules/
+out/
+dist/
+.DS_Store
+*.log
+# Personal knowledge never goes in this public repo.
+vault/
+# The source PRD contains personal background; keep it local.
+docs/private/

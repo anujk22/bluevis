@@ -1,0 +1,213 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { cleanCommand, extractError, LineBuffer, parseClaudeLine, parseCodexLine, parseOpenAISSELine } from '../src/core/parsers'
+import { applyTaskEvent, newTask } from '../src/core/taskState'
+import { matchProject, route } from '../src/core/router'
+import { parseReply, speakable, splitSentences } from '../src/core/reply'
+import { parseNote, rank, serializeNote, slugify } from '../src/core/notes'
+import type { AgentEvent } from '../src/core/types'
+
+const fixture = (name: string) => readFileSync(join(__dirname, 'fixtures', name), 'utf8').split('\n')
+
+describe('codex parser', () => {
+  const events = fixture('codex.jsonl').flatMap(parseCodexLine)
+
+  it('reads session, commands, final message and completion from a real run', () => {
+    expect(events[0]).toEqual({ kind: 'session', id: '01a0d6df-9327-7753-97d5-520a14d6ec57' })
+    const cmds = events.filter((e) => e.kind === 'command')
+    expect(cmds.map((c) => c.kind === 'command' && c.status)).toEqual(['running', 'done', 'running', 'done'])
+    expect(cmds[0].kind === 'command' && cmds[0].command).toBe('ls')
+    expect(events).toContainEqual({ kind: 'message', text: 'done' })
+    expect(events.at(-1)).toEqual({ kind: 'done' })
+  })
+
+  it('treats feature notices as warnings, not failures', () => {
+    expect(events.some((e) => e.kind === 'warning')).toBe(true)
+    expect(events.some((e) => e.kind === 'error')).toBe(false)
+  })
+
+  it('surfaces nested API error messages', () => {
+    const line = JSON.stringify({ type: 'turn.failed', error: { message: JSON.stringify({ error: { message: 'model not supported' } }) } })
+    expect(parseCodexLine(line)).toEqual([{ kind: 'error', message: 'model not supported' }])
+    expect(extractError('plain')).toBe('plain')
+  })
+
+  it('unwraps login-shell commands', () => {
+    expect(cleanCommand('/bin/zsh -lc "npm test"')).toBe('npm test')
+    expect(cleanCommand("/bin/zsh -lc 'echo \"hi\"'")).toBe('echo "hi"')
+    expect(cleanCommand('git status')).toBe('git status')
+  })
+})
+
+describe('claude parser', () => {
+  const events = fixture('claude.jsonl').flatMap(parseClaudeLine)
+
+  it('streams text deltas and reports tools and completion', () => {
+    expect(events[0].kind).toBe('session')
+    const text = events.filter((e) => e.kind === 'text-delta').map((e) => (e.kind === 'text-delta' ? e.text : '')).join('')
+    expect(text).toContain('hello')
+    expect(events.some((e) => e.kind === 'tool' && e.name === 'Read')).toBe(true)
+    expect(events.at(-1)).toEqual({ kind: 'done' })
+  })
+})
+
+describe('openai sse parser', () => {
+  it('parses deltas and done', () => {
+    expect(parseOpenAISSELine('data: {"choices":[{"delta":{"content":"Hi"}}]}')).toEqual([{ kind: 'text-delta', text: 'Hi' }])
+    expect(parseOpenAISSELine('data: [DONE]')).toEqual([{ kind: 'done' }])
+    expect(parseOpenAISSELine(': keepalive')).toEqual([])
+  })
+})
+
+describe('line buffer', () => {
+  it('reassembles split lines', () => {
+    const b = new LineBuffer()
+    expect(b.push('{"a":1}\n{"b"')).toEqual(['{"a":1}'])
+    expect(b.push(':2}\n')).toEqual(['{"b":2}'])
+    expect(b.flush()).toEqual([])
+  })
+})
+
+describe('task state', () => {
+  const base = () => newTask({ id: 't', title: 't', prompt: 'p', choice: { provider: 'codex', model: 'm' }, cwd: '/x' }, 0)
+  const run = (evs: AgentEvent[]) => evs.reduce((t, e) => applyTaskEvent(t, e, 1), base())
+
+  it('marks verified only when a passing check follows the last edit', () => {
+    const t = run([
+      { kind: 'file-change', id: 'f', changes: [{ path: 'src/a.ts', kind: 'update' }] },
+      { kind: 'command', id: 'c', command: 'npm test', status: 'running' },
+      { kind: 'command', id: 'c', command: 'npm test', status: 'done', exitCode: 0 },
+      { kind: 'done' }
+    ])
+    expect(t.status).toBe('completed-verified')
+    expect(t.filesChanged).toEqual(['src/a.ts'])
+    expect(t.steps).toHaveLength(2)
+  })
+
+  it('stays unverified when edits happen after the last check', () => {
+    const t = run([
+      { kind: 'command', id: 'c', command: 'npm test', status: 'done', exitCode: 0 },
+      { kind: 'file-change', id: 'f', changes: [{ path: 'a', kind: 'update' }] },
+      { kind: 'done' }
+    ])
+    expect(t.status).toBe('completed-unverified')
+  })
+
+  it('stays unverified when the last check failed', () => {
+    const t = run([
+      { kind: 'file-change', id: 'f', changes: [{ path: 'a', kind: 'update' }] },
+      { kind: 'command', id: 'c1', command: 'npm test', status: 'done', exitCode: 0 },
+      { kind: 'command', id: 'c2', command: 'npx vitest', status: 'failed', exitCode: 1 },
+      { kind: 'done' }
+    ])
+    expect(t.status).toBe('completed-unverified')
+  })
+
+  it('reflects live phases', () => {
+    const t = base()
+    applyTaskEvent(t, { kind: 'command', id: 'a', command: 'rg foo', status: 'running' })
+    expect(t.status).toBe('investigating')
+    applyTaskEvent(t, { kind: 'command', id: 'b', command: 'pytest -q', status: 'running' })
+    expect(t.status).toBe('testing')
+    applyTaskEvent(t, { kind: 'error', message: 'boom' })
+    expect(t.status).toBe('failed')
+  })
+})
+
+describe('router', () => {
+  const projects = ['Yonder', 'Blues Basketball', 'Bluevis']
+
+  it('delegates to named agents with project extraction', () => {
+    expect(route('Have Codex investigate the failing purchase test in Yonder', projects)).toEqual({
+      type: 'delegate',
+      agent: 'codex',
+      model: undefined,
+      prompt: 'investigate the failing purchase test',
+      project: 'Yonder'
+    })
+    expect(route('let opus review the approach', projects)).toMatchObject({ type: 'delegate', agent: 'claude', model: 'opus' })
+    expect(route('claude: fix the lint errors', projects)).toMatchObject({ type: 'delegate', agent: 'claude', prompt: 'fix the lint errors' })
+  })
+
+  it('strips the wake word', () => {
+    expect(route('Hey Bluevis, status?', projects)).toEqual({ type: 'status' })
+  })
+
+  it('handles sessions and memory', () => {
+    expect(route('where did I leave off on blues', projects)).toEqual({ type: 'resume', project: 'Blues Basketball' })
+    expect(route("I'm done with Yonder for tonight", projects)).toEqual({ type: 'end-session', project: 'Yonder' })
+    expect(route('Save that as an idea: map clustering for bounties', projects)).toMatchObject({ type: 'remember', kind: 'idea', text: 'map clustering for bounties' })
+    expect(route('Remember that I prefer pnpm, but keep it out of cloud-agent handoffs', projects)).toEqual({
+      type: 'remember',
+      kind: 'fact',
+      text: 'I prefer pnpm',
+      private: true
+    })
+  })
+
+  it('distinguishes stopping speech from stopping work', () => {
+    expect(route('stop', projects)).toEqual({ type: 'stop-speech' })
+    expect(route('stop the agent', projects)).toEqual({ type: 'stop-task', agent: undefined })
+    expect(route('cancel codex', projects)).toEqual({ type: 'stop-task', agent: 'codex' })
+  })
+
+  it('opens only known projects, otherwise chats', () => {
+    expect(route('open yonder', projects)).toEqual({ type: 'open', target: 'Yonder' })
+    expect(route('open the pod bay doors', projects)).toMatchObject({ type: 'chat' })
+    expect(route("why isn't this working?", projects)).toMatchObject({ type: 'chat' })
+  })
+
+  it('matches project fragments', () => {
+    expect(matchProject('blues', projects)).toBe('Blues Basketball')
+    expect(matchProject('nothing', projects)).toBeUndefined()
+  })
+})
+
+describe('reply parsing', () => {
+  it('splits spoken and shown text and extracts directives', () => {
+    const r = parseReply(
+      'The purchase test fails on a null price.\n---\nDetails:\n- `price` is undefined\nACTION: {"type":"delegate","agent":"codex","project":"Yonder","prompt":"Fix null price"}\nMEMORY: {"kind":"decision","title":"Price validation","text":"Validate price server-side"}'
+    )
+    expect(r.spoken).toBe('The purchase test fails on a null price.')
+    expect(r.shown).toContain('price')
+    expect(r.shown).not.toContain('ACTION')
+    expect(r.actions).toEqual([{ type: 'delegate', agent: 'codex', project: 'Yonder', prompt: 'Fix null price' }])
+    expect(r.memories[0]).toMatchObject({ kind: 'decision', title: 'Price validation' })
+  })
+
+  it('speaks only the first sentences without a separator and never code', () => {
+    const r = parseReply('One. Two. Three. Four.\n\n```js\nx()\n```')
+    expect(r.spoken).toBe('One. Two. Three.')
+    expect(speakable('Run `npm test` and see [docs](http://x)')).toBe('Run npm test and see docs')
+  })
+
+  it('splits sentences safely', () => {
+    expect(splitSentences('Costs 3.5 dollars, e.g. cheap. Done! Next')).toEqual(['Costs 3.5 dollars, e.g. cheap.', 'Done!', 'Next'])
+  })
+})
+
+describe('notes', () => {
+  it('round-trips frontmatter', () => {
+    const text = serializeNote({ title: 'Yonder', status: 'needs-review', tags: ['project', 'hackathon'], source: 'PRD: 2026-09-25' }, '# Yonder\n\nBody')
+    const n = parseNote(text)
+    expect(n.data).toEqual({ title: 'Yonder', status: 'needs-review', tags: ['project', 'hackathon'], source: 'PRD: 2026-09-25' })
+    expect(n.body.trim()).toBe('# Yonder\n\nBody')
+    expect(parseNote('---\ntags: [a, b]\n---\nx').data.tags).toEqual(['a', 'b'])
+    expect(parseNote('no frontmatter').body).toBe('no frontmatter')
+  })
+
+  it('slugifies', () => {
+    expect(slugify("Anuj's Blues Basketball!")).toBe('anujs-blues-basketball')
+  })
+
+  it('ranks by title, tags, then body', () => {
+    const notes = [
+      { path: 'a', title: 'Communication', body: 'no em dashes, concise', tags: ['preference'] },
+      { path: 'b', title: 'Yonder', body: 'bounties map questions', tags: ['project'] },
+      { path: 'c', title: 'Random', body: 'yonder mentioned once' }
+    ]
+    expect(rank('what do you know about yonder', notes).map((n) => n.path)).toEqual(['b', 'c'])
+    expect(rank('the', notes)).toEqual([])
+  })
+})
