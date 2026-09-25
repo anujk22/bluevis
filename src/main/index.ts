@@ -1,11 +1,12 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, session, shell, systemPreferences, Tray } from 'electron'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Settings } from '../core/types'
+import type { ModelChoice, Settings } from '../core/types'
 import { Brain, label } from './brain'
 import { Importer } from './importer'
 import { RelayManager } from './relay'
 import { discoverProjects } from './projects'
+import { HistoryService } from './history'
 import { onRateLimits, providerHealth } from './providers'
 import { UsageService } from './usage'
 import { setGeminiKey } from './secrets'
@@ -194,6 +195,17 @@ app.whenReady().then(async () => {
   ipcMain.handle('action:dismiss', (_e, id: string) => brain.dismissAction(id))
   ipcMain.handle('memory:undo', (_e, id: string) => brain.undoMemory(id))
   ipcMain.handle('tasks:list', () => tasks.list())
+  const history = new HistoryService()
+  ipcMain.handle('history:list', () => history.list())
+  ipcMain.handle('history:read', (_e, file: string) => history.read(file))
+  // Continuing a past thread runs as an agent task in that thread's folder, so its progress is tracked like any other.
+  ipcMain.handle('history:continue', (_e, file: string, prompt: string) => {
+    const t = history.list().find((x) => x.file === file)
+    if (!t) throw new Error('Unknown thread')
+    const { model, effort } = history.read(file)
+    const choice: ModelChoice = t.provider === 'codex' ? { provider: 'codex', model: model ?? 'gpt-6-sol', effort: (effort as ModelChoice['effort']) ?? 'medium' } : { provider: 'claude', model: model ?? 'opus' }
+    return tasks.start({ title: t.title, prompt, choice, cwd: t.cwd, sessionId: t.id })
+  })
   ipcMain.handle('tasks:start', (_e, t: { agent: 'codex' | 'claude'; project: string; prompt: string }) =>
     brain.delegate({ kind: 'delegate', agent: t.agent, project: t.project, prompt: t.prompt, state: 'proposed' }, undefined, true)
   )

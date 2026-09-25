@@ -189,8 +189,9 @@ button {
   position: relative;
   z-index: 3;
   flex: none;
-  display: flex;
-  justify-content: space-between;
+  /* Nav centers in the space between the side groups, so it can never overlap them. */
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 20px;
   height: 58px;
@@ -220,9 +221,7 @@ button {
 
 
 .nav {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  justify-self: center;
   display: flex;
   gap: 2px;
   padding: 4px;
@@ -230,7 +229,7 @@ button {
 
 .nav button {
   position: relative;
-  padding: 7px 18px;
+  padding: 7px 15px;
   border-radius: 999px;
   color: var(--mist);
   font-size: 13px;
@@ -2652,4 +2651,163 @@ kbd {
   border-radius: 50%;
   background: var(--bone);
   box-shadow: 0 0 0 3px var(--abyss), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ————— History ————— */
+
+.history {
+  grid-template-columns: 340px 1fr;
+}
+
+.history .panel {
+  overflow-x: hidden;
+}
+
+.seg {
+  display: flex;
+  gap: 4px;
+  margin: 10px 0 14px;
+}
+
+.seg button {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--mist);
+  border: 1px solid transparent;
+}
+
+.seg button[aria-checked='true'] {
+  color: var(--bone);
+  border-color: var(--line-2);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.thread-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.thread-head h2 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 28px;
+  margin: 4px 0 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+  user-select: text;
+}
+
+.th-user {
+  margin: 22px 0 10px auto;
+  max-width: 78%;
+  width: fit-content;
+  padding: 10px 14px;
+  border-radius: 14px 14px 4px 14px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+  color: var(--bone);
+  font-size: 14px;
+}
+
+.th-assistant {
+  min-width: 0;
+  margin: 8px 0;
+  color: var(--bone-2);
+  font-size: 14px;
+}
+
+.th-actions {
+  margin: 6px 0;
+  color: var(--mist);
+}
+
+.th-actions summary {
+  cursor: pointer;
+  color: var(--faint);
+}
+
+.th-actions ul,
+.th-live ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0 0 0 12px;
+  border-left: 1px solid var(--line);
+}
+
+.th-actions li,
+.th-live li {
+  padding: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.th-actions .k {
+  color: var(--sky);
+}
+
+.th-live {
+  margin: 18px 0 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgb(from var(--periwinkle) r g b / 0.35);
+  background: linear-gradient(180deg, rgb(from var(--klein) r g b / 0.07), var(--surface) 40%);
+}
+
+.th-live li[data-s='failed'] {
+  color: var(--fault);
+}
+
+.thread-composer {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+}
+
+.thread-composer textarea {
+  flex: 1;
+  min-height: 40px;
+  max-height: 160px;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 14px;
+  user-select: text;
+}
+
+.thread-note {
+  margin: 6px 4px 0;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.th-assistant pre {
+  max-width: 100%;
+  overflow-x: auto;
 }

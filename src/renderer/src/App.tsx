@@ -10,10 +10,18 @@ import { Agents } from './views/Agents'
 import { Memory } from './views/Memory'
 import { SettingsView } from './views/Settings'
 import { Relays } from './views/Relays'
+import { History } from './views/History'
 import type { RelayRun } from '../../core/relay'
 import { BASE_HUE, DEFAULT_ACCENT } from '../../core/color'
 
-export type View = 'talk' | 'agents' | 'relays' | 'memory' | 'settings'
+export type View = 'talk' | 'agents' | 'history' | 'relays' | 'memory' | 'settings'
+const NAV: [View, string][] = [
+  ['talk', 'Talk'],
+  ['agents', 'Agents'],
+  ['history', 'History'],
+  ['relays', 'Relays'],
+  ['memory', 'Memory']
+]
 export interface Ctx {
   activeProject?: string
   brain?: ModelChoice
@@ -205,9 +213,9 @@ export function App() {
           <UsageChips usage={usage} onOpen={() => setView('settings')} />
         </div>
         <nav className="nav" aria-label="Sections">
-          {(['talk', 'agents', 'relays', 'memory'] as const).map((v) => (
+          {NAV.map(([v, name]) => (
             <button key={v} aria-current={view === v ? 'page' : undefined} onClick={() => setView(v)}>
-              {v === 'talk' ? 'Talk' : v === 'agents' ? 'Agents' : v === 'relays' ? 'Relays' : 'Memory'}
+              {name}
               {v === 'agents' && running.length > 0 && <span className="count">{running.length}</span>}
               {v === 'relays' && relaysRunning > 0 && <span className="count">{relaysRunning}</span>}
             </button>
@@ -282,6 +290,7 @@ export function App() {
             }}
           />
         )}
+        {view === 'history' && <History tasks={taskList} />}
         {view === 'agents' && <Agents tasks={taskList} focus={focusTask} onFocus={setFocusTask} settings={settings} />}
         {view === 'relays' && <Relays runs={relayList} focus={focusRelay} onFocus={setFocusRelay} />}
         {view === 'memory' && <Memory searchFocus={searchFocus} />}
