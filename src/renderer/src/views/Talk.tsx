@@ -141,8 +141,14 @@ function Composer(p: Props) {
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 180)}px`
+    const fit = () => {
+      el.style.height = 'auto'
+      el.style.height = `${Math.min(el.scrollHeight, 180)}px`
+    }
+    fit()
+    // The window can mount or grow while orb-sized; refit once it has its real width.
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
   }, [text])
   const submit = () => {
     if (!text.trim()) return
