@@ -102,8 +102,10 @@ export function ModelMenu({ settings, label, usage, onChange }: { settings: Sett
 }
 
 /** Things that need Anuj: proposals awaiting a go-ahead, running and failed work. */
-export function AttentionMenu({ turns, tasks, relays, onGo }: { turns: Turn[]; tasks: AgentTask[]; relays: RelayRun[]; onGo: (where: 'talk' | 'agents' | 'relays', id?: string) => void }) {
-  const items: { key: string; label: string; detail: string; go: () => void; tone: 'warm' | 'live' | 'bad' }[] = []
+export type AttentionItem = { key: string; label: string; detail: string; go: () => void; tone: 'warm' | 'live' | 'bad' }
+
+export function AttentionMenu({ turns, tasks, relays, extra = [], onGo }: { turns: Turn[]; tasks: AgentTask[]; relays: RelayRun[]; extra?: AttentionItem[]; onGo: (where: 'talk' | 'agents' | 'relays', id?: string) => void }) {
+  const items: AttentionItem[] = [...extra]
   for (const t of turns) if (t.action?.state === 'proposed') items.push({ key: t.id, label: `Approve ${t.action.agent === 'claude' ? 'Claude' : 'Codex'}?`, detail: t.action.prompt.slice(0, 80), go: () => onGo('talk'), tone: 'warm' })
   for (const r of relays) if (r.status === 'running') items.push({ key: r.id, label: `Relay running · ${r.title}`, detail: r.stages.find((s) => s.status === 'running')?.label ?? '', go: () => onGo('relays', r.id), tone: 'live' })
   for (const t of tasks.slice(0, 8)) {

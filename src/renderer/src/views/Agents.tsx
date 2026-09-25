@@ -5,6 +5,7 @@ import { TaskStatus } from '../components/TaskStatus'
 import { TerminalPane } from '../components/TerminalPane'
 import { dispose } from '../terminals'
 import type { TerminalInfo } from '../../../core/terminal'
+import { nextRun, type QueuedTask } from '../../../core/queue'
 
 const LIVE = new Set(['starting', 'investigating', 'editing', 'testing', 'awaiting-approval'])
 
@@ -80,6 +81,7 @@ export function Agents({
         ))}
         <div className="eyebrow side-head">Agents</div>
         <NewTask settings={settings} />
+        <Tonight />
         {tasks.map((t) => (
           <button
             key={t.id}
@@ -109,6 +111,50 @@ export function Agents({
       ) : (
         <section className="panel">{selected ? <TaskDetail task={selected} onTakeOver={onTakeOver} /> : <NoTasks />}</section>
       )}
+    </div>
+  )
+}
+
+interface QueueState {
+  items: QueuedTask[]
+  runAt: string
+  lastRunDay: string | null
+}
+
+/** Briefs saved for the overnight run. */
+function Tonight() {
+  const api = window.bluevis
+  const [q, setQ] = useState<QueueState | null>(null)
+  useEffect(() => {
+    void api.queue.get().then((x) => setQ(x as QueueState))
+    const off = api.on('queue', (x) => setQ(x as QueueState))
+    return () => void off()
+  }, [api])
+  if (!q?.items.length) return null
+  const next = nextRun(q.runAt, q.lastRunDay, new Date())
+  return (
+    <div className="tonight">
+      <div className="row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="eyebrow">Tonight</span>
+        <input type="time" className="input mono" value={q.runAt} onChange={(e) => api.queue.runAt(e.target.value)} aria-label="Run the queue at" />
+        <button className="btn btn-quiet" style={{ marginLeft: 'auto' }} onClick={() => api.queue.run()}>
+          Run now
+        </button>
+      </div>
+      {q.items.map((i) => (
+        <div key={i.id} className="queued">
+          <span className="mono">{i.agent === 'claude' ? 'Claude' : 'Codex'} · {i.project}</span>
+          <span className="t">{i.taskId ? 'started · ' : ''}{i.prompt}</span>
+          {!i.taskId && (
+            <button className="btn btn-quiet" aria-label="Remove from tonight" onClick={() => api.queue.remove(i.id)}>
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      <p className="fine">
+        Runs {next.toDateString() === new Date().toDateString() ? 'today' : 'tomorrow'} at {next.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} if the Mac is awake. Bluevis keeps it from idle-sleeping until the queue finishes.
+      </p>
     </div>
   )
 }
@@ -196,7 +242,21 @@ function NewTask({ settings }: { settings: Settings | null }) {
             </option>
           ))}
         </select>
-        <button className="btn btn-primary" style={{ marginLeft: 'auto' }} disabled={!prompt.trim() || !project} onClick={start}>
+        <button
+          className="btn btn-quiet"
+          style={{ marginLeft: 'auto' }}
+          disabled={!prompt.trim() || !project}
+          title="Save it for the overnight run"
+          onClick={async () => {
+            const p = projects.find((x) => x.name === project)
+            if (!p || !prompt.trim()) return
+            await api.queue.add({ prompt: prompt.trim(), project: p.name, projectPath: p.path, agent })
+            setPrompt('')
+          }}
+        >
+          Tonight
+        </button>
+        <button className="btn btn-primary" disabled={!prompt.trim() || !project} onClick={start}>
           Start
         </button>
       </div>

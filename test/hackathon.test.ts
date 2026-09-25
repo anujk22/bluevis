@@ -43,3 +43,23 @@ describe('hackathon', () => {
     expect(parseExtract('no json')).toBeNull()
   })
 })
+
+import { allowanceNudge, queueDue, nextRun } from '../src/core/queue'
+
+describe('overnight queue', () => {
+  const at = (h: number, m = 0) => new Date(2026, 8, 25, h, m)
+  it('runs once after the run time and never hours late', () => {
+    expect(queueDue('01:30', null, at(1, 45))).toBe(true)
+    expect(queueDue('01:30', at(1, 45).toDateString(), at(2))).toBe(false)
+    expect(queueDue('01:30', null, at(0, 10))).toBe(false)
+    expect(queueDue('01:30', null, at(23))).toBe(false)
+    expect(nextRun('01:30', null, at(23)).getDate()).toBe(26)
+  })
+  it('nudges only when a real share of the week resets soon', () => {
+    const now = Date.now()
+    const snap = (used: number, inH: number) => ({ provider: 'codex' as const, observedAt: now, windows: [{ name: 'weekly', usedPercent: used, resetsAt: now + inH * 3600_000 }] })
+    expect(allowanceNudge(snap(60, 4), now)).toEqual({ left: 40, hours: 4 })
+    expect(allowanceNudge(snap(90, 4), now)).toBeNull()
+    expect(allowanceNudge(snap(60, 40), now)).toBeNull()
+  })
+})

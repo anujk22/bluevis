@@ -35,6 +35,7 @@ const api = {
     kit: invoke('hack:kit'),
     rehearse: invoke('hack:rehearse')
   },
+  queue: { get: invoke('queue:get'), add: invoke('queue:add'), remove: invoke('queue:remove'), runAt: invoke('queue:run-at'), run: invoke('queue:run') },
   history: { list: invoke('history:list'), read: invoke('history:read'), continue: invoke('history:continue') },
   projects: { list: invoke('projects:list'), activate: invoke('project:activate'), reveal: invoke('project:reveal') },
   memory: { atlas: invoke('memory:atlas'), read: invoke('memory:read'), open: invoke('memory:open'), undo: invoke('memory:undo'), revert: invoke('memory:revert'), search: invoke('memory:search') },

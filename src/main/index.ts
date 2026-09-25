@@ -9,6 +9,7 @@ import { discoverProjects } from './projects'
 import { HistoryService } from './history'
 import { TerminalManager } from './terminals'
 import { HackathonManager } from './hackathon'
+import { QueueManager } from './queue'
 import { onRateLimits, providerHealth } from './providers'
 import { UsageService } from './usage'
 import { getSecret, setSecret } from './secrets'
@@ -215,6 +216,13 @@ app.whenReady().then(async () => {
     if (!transcript.trim()) throw new Error('No speech was heard in that take.')
     return hackathons.rehearse(id, transcript, seconds)
   })
+
+  const queue = new QueueManager(tasks, (q) => send('queue', q))
+  ipcMain.handle('queue:get', () => queue.get())
+  ipcMain.handle('queue:add', (_e, t: { prompt: string; project: string; projectPath: string; agent: 'codex' | 'claude' }) => queue.add(t))
+  ipcMain.handle('queue:remove', (_e, id: string) => queue.remove(id))
+  ipcMain.handle('queue:run-at', (_e, at: string) => queue.setRunAt(at))
+  ipcMain.handle('queue:run', () => void queue.run())
 
   const terminals = new TerminalManager(send)
   brain.terminals = terminals

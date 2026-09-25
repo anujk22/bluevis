@@ -1104,12 +1104,13 @@ button.chip:hover {
 
 .new-task .row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
 
 .new-task .select {
-  flex: 1;
+  flex: 1 1 40%;
   min-width: 0;
 }
 
@@ -3030,6 +3031,7 @@ kbd {
 }
 
 .hack-meta input {
+  min-width: 0;
   margin-left: 6px;
   height: 28px;
   font-size: 11px;
@@ -3224,4 +3226,51 @@ kbd {
   color: var(--mist);
   font-size: 13px;
   white-space: pre-wrap;
+}
+
+.tonight {
+  border: 1px dashed var(--line-2);
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin: -6px 0 16px;
+}
+
+.tonight input[type='time'] {
+  height: 26px;
+  font-size: 11px;
+  width: 104px;
+  min-width: 0;
+}
+
+.queued {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.queued .mono {
+  color: var(--faint);
+  grid-column: 1;
+}
+
+.queued .t {
+  grid-column: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queued button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.tonight .fine {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--faint);
 }
