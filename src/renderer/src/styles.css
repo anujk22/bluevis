@@ -232,6 +232,12 @@ button {
   color: var(--glacier);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
 .header-right {
   justify-self: end;
   display: flex;
@@ -2125,6 +2131,12 @@ kbd {
 .usage-chip .pct {
   color: var(--bone-2);
   font-size: 9.5px;
+}
+
+.usage-left {
+  margin-left: -4px;
+  font-size: 9.5px;
+  color: var(--faint);
 }
 
 .meter {

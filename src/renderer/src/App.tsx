@@ -192,7 +192,10 @@ export function App() {
   return (
     <div className="shell" data-empty={empty}>
       <header className="header glass">
-        <div className="wordmark">bluevis</div>
+        <div className="header-left">
+          <div className="wordmark">bluevis</div>
+          <UsageChips usage={usage} onOpen={() => setView('settings')} />
+        </div>
         <nav className="nav" aria-label="Sections">
           {(['talk', 'agents', 'relays', 'memory'] as const).map((v) => (
             <button key={v} aria-current={view === v ? 'page' : undefined} onClick={() => setView(v)}>
@@ -209,7 +212,6 @@ export function App() {
               {ctx.activeProject}
             </button>
           )}
-          <UsageChips usage={{ codex: usage.codex, claude: null }} onOpen={() => setView('settings')} />
           <ModelMenu settings={settings} label={ctx.brainLabel} usage={usage} onChange={setSettings} />
           <button
             className="icon-btn"

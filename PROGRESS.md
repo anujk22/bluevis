@@ -65,12 +65,12 @@ Nothing loads the whole vault. Per turn Bluevis sends: `Profile/Core.md` (~1.3k 
 - [x] Hackathon relay (Devpost → Opus ideate → Astra challenge → Opus consolidate), live pipeline view, plan saved to `Outputs/Hackathons/` (verified end to end on HackNYU 2025, ~9 min)
 - [x] Read-only Gmail through Claude's Gmail connector (write tools explicitly denied), every search shown under the reply
 - [x] Calendar + Canvas via private ICS feeds (Settings → Calendars), recurrences, time zones
-- [x] Usage remaining for Codex (session logs) and Claude (rate-limit events) in the model menu and Settings
+- [x] Usage remaining for Codex (session logs) and Claude (rate-limit events) in the header (beside the wordmark), model menu and Settings; Claude takes one tiny Haiku reading at launch when its last reading is over 3h old
 - [x] Pocket TTS voices + one-click voice picker with previews; Kokoro kept as the fast option
 - [x] Glass redesign (navy fog, pearl orb, glass header/cards/composer), native traffic lights, menu bar icon, orb app icon
 - [x] Installable app: `npx electron-builder --mac dir` then copy `dist/mac-arm64/Bluevis.app` to /Applications
 - [ ] GPT image generation as an MCP tool for Claude (Codex image_generation works from exec, ~60s/image)
-- [~] Gemini provider (CLI 0.61 installed and wired, streams; needs a one-time `gemini` Google sign-in before it can be verified)
+- [~] Gemini provider (CLI wired, but Google rejects personal-account login with IneligibleTierError; needs an AI Studio API key route instead. No Gemini usage meter: no source reports remaining quota)
 - [x] Streaming speech: sentences are spoken as the reply streams (Gemini, Claude, local); Codex still speaks after completion
 - [x] Memory gate: general questions get a one-line identity only; the vault is consulted for personal, schedule, work and project questions, with strict meaning-gated retrieval (thresholds measured on the real vault)
 - [x] Graphite glass theme, centered nav, Codex remaining meter in the header

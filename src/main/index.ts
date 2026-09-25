@@ -174,6 +174,9 @@ app.whenReady().then(async () => {
   const usage = new UsageService((u) => send('usage', u))
   onRateLimits((raw) => usage.recordClaude(raw))
   ipcMain.handle('usage:get', () => usage.get())
+  // Claude only reports limits during a run; if the last reading is old, take one tiny reading at launch.
+  const lastClaude = usage.get().claude
+  if (!lastClaude || Date.now() - lastClaude.observedAt > 3 * 3600_000) usage.refreshClaude(join(app.getPath('userData'), 'workspace')).catch(() => {})
   ipcMain.handle('usage:refresh-claude', async () => {
     await usage.refreshClaude(join(app.getPath('userData'), 'workspace'))
     return usage.get()
