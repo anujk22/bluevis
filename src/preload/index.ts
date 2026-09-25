@@ -18,7 +18,7 @@ const api = {
   projects: { list: invoke('projects:list'), activate: invoke('project:activate'), reveal: invoke('project:reveal') },
   memory: { atlas: invoke('memory:atlas'), read: invoke('memory:read'), open: invoke('memory:open'), undo: invoke('memory:undo'), revert: invoke('memory:revert'), search: invoke('memory:search') },
   settings: { get: invoke('settings:get'), set: invoke('settings:set') },
-  providers: { health: invoke('providers:health') },
+  providers: { health: invoke('providers:health'), setGeminiKey: invoke('gemini:set-key') },
   voice: { start: invoke('voice:start'), stop: invoke('voice:stop'), health: invoke('voice:health'), stt: invoke('voice:stt'), tts: invoke('voice:tts') },
   window: { setMode: invoke('window:mode'), getMode: invoke('window:get-mode'), hide: invoke('window:hide'), quit: invoke('app:quit') },
   relays: { list: invoke('relays:list'), start: invoke('relays:start'), stop: invoke('relays:stop') },

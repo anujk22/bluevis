@@ -149,7 +149,7 @@ function ModelPicker({ value, onChange, localModels, allowLocal = true }: { valu
               : p === 'claude'
                 ? { provider: 'claude', model: 'haiku' }
                 : p === 'gemini'
-                  ? { provider: 'gemini', model: 'gemini-3.8-flash' }
+                  ? { provider: 'gemini', model: 'gemini-3.8-flash', effort: 'low' }
                   : { provider: 'local', model: localModels[0] ?? '' }
           )
         }}
@@ -176,6 +176,41 @@ function ModelPicker({ value, onChange, localModels, allowLocal = true }: { valu
           ))}
         </select>
       )}
+    </div>
+  )
+}
+
+/** Gemini runs through an AI Studio API key, stored encrypted in the keychain; the key never comes back to the page. */
+function GeminiKey({ saved, onSaved }: { saved: boolean; onSaved: () => void }) {
+  const [key, setKey] = useState('')
+  const [state, setState] = useState<{ busy?: boolean; error?: string }>({})
+  const submit = async () => {
+    setState({ busy: true })
+    const r = (await window.bluevis.providers.setGeminiKey(key)) as { ok: boolean; error?: string }
+    setState(r.ok ? {} : { error: r.error })
+    if (r.ok) {
+      setKey('')
+      onSaved()
+    }
+  }
+  return (
+    <div className="field">
+      <label>Gemini API key</label>
+      <div className="ctrl" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input
+          className="input mono"
+          type="password"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && key.trim() && void submit()}
+          placeholder={saved ? 'Saved. Paste a new key to replace it' : 'Paste a key from aistudio.google.com'}
+          aria-label="Gemini API key"
+        />
+        <button className="btn" disabled={!key.trim() || state.busy} onClick={submit}>
+          {state.busy ? 'Checking…' : 'Save key'}
+        </button>
+        {state.error && <div className="d" style={{ color: 'var(--amber)', width: '100%', fontSize: 12.5 }}>{state.error}</div>}
+      </div>
     </div>
   )
 }
@@ -225,6 +260,7 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
               <input className="input mono" defaultValue={settings.localBaseUrl} onBlur={(e) => e.target.value !== settings.localBaseUrl && save({ localBaseUrl: e.target.value })} aria-label="Local model server URL" />
             </div>
           </div>
+          <GeminiKey saved={!!health?.find((h) => h.provider === 'gemini' && h.ok)} onSaved={() => void api.providers.health().then((h) => setHealth(h as ProviderHealth[]))} />
           <div className="health" style={{ marginTop: 14 }}>
             {(health ?? []).map((h) => (
               <div key={h.provider}>

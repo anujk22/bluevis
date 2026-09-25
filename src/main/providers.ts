@@ -1,9 +1,10 @@
 import type { ChildProcess } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseClaudeLine, parseCodexLine, parseGeminiLine, parseOpenAISSELine, LineBuffer } from '../core/parsers'
+import { parseClaudeLine, parseCodexLine, parseGeminiSSELine, parseOpenAISSELine, LineBuffer } from '../core/parsers'
 import type { AgentEvent, ModelChoice, ProviderHealth } from '../core/types'
+import { geminiKey } from './secrets'
 import { run, spawnLines } from './shell'
 
 export interface RunOptions {
@@ -16,7 +17,7 @@ export interface RunOptions {
   images?: string[]
   /** Persona / system instructions. Codex receives them inline on the first turn. */
   system?: string
-  /** Prior turns, used only by the stateless local provider. */
+  /** Prior turns, used by the stateless providers (Gemini, local). */
   history?: { role: 'user' | 'assistant'; content: string }[]
   localBaseUrl?: string
   /** Claude only: exact tool allowlist for this run (replaces the brain's default read-only set). */
@@ -135,12 +136,58 @@ function runClaude(o: RunOptions): RunHandle {
   return cliRun('claude', args, o, parseClaudeLine, prompt)
 }
 
+const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models'
+
 function runGemini(o: RunOptions): RunHandle {
-  // Headless Gemini CLI: prompt on stdin, streamed JSON events, read-only plan mode.
-  const args = ['-m', o.choice.model, '-o', 'stream-json', '--approval-mode', 'plan', '-p', '']
-  if (o.sessionId) args.push('--resume', o.sessionId)
-  const prompt = o.system && !o.sessionId ? `<instructions>\n${o.system}\n</instructions>\n\n${o.prompt}` : o.prompt
-  return cliRun('gemini', args, o, parseGeminiLine, prompt)
+  // Direct Gemini API: stateless, so prior turns travel with each request.
+  const controller = new AbortController()
+  const done = (async () => {
+    try {
+      const key = geminiKey()
+      if (!key) throw new Error('Add a Gemini API key in Settings, under Models.')
+      const images = (o.images ?? []).map((p) => ({ inlineData: { mimeType: p.endsWith('.png') ? 'image/png' : 'image/jpeg', data: readFileSync(p).toString('base64') } }))
+      const contents = [
+        ...(o.history ?? []).map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+        { role: 'user', parts: [...images, { text: o.prompt }] }
+      ]
+      const res = await fetch(`${GEMINI_API}/${o.choice.model}:streamGenerateContent?alt=sse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          ...(o.system ? { systemInstruction: { parts: [{ text: o.system }] } } : {}),
+          contents,
+          ...(o.choice.effort ? { generationConfig: { thinkingConfig: { thinkingLevel: o.choice.effort } } } : {})
+        }),
+        signal: controller.signal
+      })
+      if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error?.message ?? `Gemini returned ${res.status}`)
+      const text = await streamSSE(res.body, parseGeminiSSELine, o)
+      o.onEvent({ kind: 'message', text: text.trim() })
+      o.onEvent({ kind: 'done' })
+    } catch (e) {
+      o.onEvent({ kind: 'error', message: (e as Error).name === 'AbortError' ? 'Stopped' : (e as Error).message })
+    }
+  })()
+  return { stop: () => controller.abort(), done }
+}
+
+/** Forward streamed text deltas and return the full text. Stream errors are thrown. */
+async function streamSSE(body: ReadableStream<Uint8Array>, parse: (line: string) => AgentEvent[], o: RunOptions): Promise<string> {
+  const buf = new LineBuffer()
+  const decoder = new TextDecoder()
+  let text = ''
+  for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
+    for (const line of buf.push(decoder.decode(chunk, { stream: true }))) {
+      for (const ev of parse(line)) {
+        if (ev.kind === 'error') throw new Error(ev.message)
+        if (ev.kind === 'text-delta') {
+          text += ev.text
+          o.onEvent(ev)
+        }
+      }
+    }
+  }
+  return text
 }
 
 function runLocal(o: RunOptions): RunHandle {
@@ -160,19 +207,7 @@ function runLocal(o: RunOptions): RunHandle {
         signal: controller.signal
       })
       if (!res.ok || !res.body) throw new Error(`Local model returned ${res.status}`)
-      const buf = new LineBuffer()
-      const decoder = new TextDecoder()
-      let text = ''
-      for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
-        for (const line of buf.push(decoder.decode(chunk, { stream: true }))) {
-          for (const ev of parseOpenAISSELine(line)) {
-            if (ev.kind === 'text-delta') {
-              text += ev.text
-              o.onEvent(ev)
-            }
-          }
-        }
-      }
+      const text = await streamSSE(res.body, parseOpenAISSELine, o)
       // Reasoning models may wrap thoughts in <think>; never show or speak them.
       o.onEvent({ kind: 'message', text: text.replace(/<think>[\s\S]*?<\/think>/g, '').trim() })
       o.onEvent({ kind: 'done' })
@@ -185,10 +220,9 @@ function runLocal(o: RunOptions): RunHandle {
 }
 
 export async function providerHealth(localBaseUrl: string): Promise<ProviderHealth[]> {
-  const [codex, claude, gemini, local] = await Promise.all([
+  const [codex, claude, local] = await Promise.all([
     run('codex', ['--version'], { timeout: 8000 }),
     run('claude', ['--version'], { timeout: 8000 }),
-    run('gemini', ['--version'], { timeout: 8000 }),
     fetch(`${localBaseUrl.replace(/\/$/, '')}/models`, { signal: AbortSignal.timeout(1500) })
       .then(async (r) => (r.ok ? ((await r.json()) as { data?: { id: string }[] }) : null))
       .catch(() => null)
@@ -196,7 +230,7 @@ export async function providerHealth(localBaseUrl: string): Promise<ProviderHeal
   return [
     { provider: 'codex', ok: codex.code === 0, detail: codex.code === 0 ? codex.stdout.trim() : 'codex CLI not found' },
     { provider: 'claude', ok: claude.code === 0, detail: claude.code === 0 ? claude.stdout.trim() : 'claude CLI not found' },
-    { provider: 'gemini', ok: gemini.code === 0, detail: gemini.code === 0 ? `gemini-cli ${gemini.stdout.trim()}` : 'gemini CLI not found' },
+    { provider: 'gemini', ok: !!geminiKey(), detail: geminiKey() ? 'API key saved' : 'no API key' },
     {
       provider: 'local',
       ok: !!local,

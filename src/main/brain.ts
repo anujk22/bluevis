@@ -42,7 +42,7 @@ const IDENTITY = "You're talking with Anuj Kakumanu, a Rutgers CS sophomore and 
 const BRAIN_DEFAULTS: Record<ModelChoice['provider'], ModelChoice> = {
   codex: { provider: 'codex', model: 'gpt-6-luna', effort: 'low' },
   claude: { provider: 'claude', model: 'haiku' },
-  gemini: { provider: 'gemini', model: 'gemini-3.8-flash' },
+  gemini: { provider: 'gemini', model: 'gemini-3.8-flash', effort: 'low' },
   local: { provider: 'local', model: '' }
 }
 
@@ -203,7 +203,7 @@ export class Brain {
         system: PERSONA,
         images: o.images,
         sessionId: o.fresh ? undefined : this.sessions[choice.provider],
-        history: choice.provider === 'local' && !o.fresh ? history : undefined,
+        history: (choice.provider === 'local' || choice.provider === 'gemini') && !o.fresh ? history : undefined,
         localBaseUrl: s.localBaseUrl,
         onEvent: (e) => {
           if (e.kind === 'session' && !o.fresh) this.sessions[choice.provider] = e.id

@@ -8,6 +8,7 @@ import { RelayManager } from './relay'
 import { discoverProjects } from './projects'
 import { onRateLimits, providerHealth } from './providers'
 import { UsageService } from './usage'
+import { setGeminiKey } from './secrets'
 import { getSettings, updateSettings } from './settings'
 import { adoptLoginShellPath, run } from './shell'
 import { TaskManager } from './tasks'
@@ -217,6 +218,23 @@ app.whenReady().then(async () => {
     return s
   })
   ipcMain.handle('providers:health', () => providerHealth(getSettings().localBaseUrl))
+  // Check the key against the model before keeping it; a working key makes Gemini Flash the conversation model.
+  ipcMain.handle('gemini:set-key', async (_e, raw: string) => {
+    const key = raw.trim()
+    if (!key) {
+      setGeminiKey(null)
+      return { ok: true }
+    }
+    const model = 'gemini-3.8-flash'
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}`, { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(10000) }).catch((e: Error) => e)
+    if (res instanceof Error) return { ok: false, error: `Could not reach Google (${res.message})` }
+    if (!res.ok) return { ok: false, error: ((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error?.message ?? `Google returned ${res.status}` }
+    setGeminiKey(key)
+    const s = updateSettings({ brain: { provider: 'gemini', model, effort: 'low' } })
+    send('settings', s)
+    send('context', { ...brain.context(), brainLabel: label(s.brain) })
+    return { ok: true }
+  })
   ipcMain.handle('voice:start', async () => {
     await systemPreferences.askForMediaAccess('microphone').catch(() => false)
     void voice.start()

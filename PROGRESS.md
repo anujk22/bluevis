@@ -70,7 +70,7 @@ Nothing loads the whole vault. Per turn Bluevis sends: `Profile/Core.md` (~1.3k 
 - [x] Glass redesign (navy fog, pearl orb, glass header/cards/composer), native traffic lights, menu bar icon, orb app icon
 - [x] Installable app: `npx electron-builder --mac dir` then copy `dist/mac-arm64/Bluevis.app` to /Applications
 - [ ] GPT image generation as an MCP tool for Claude (Codex image_generation works from exec, ~60s/image)
-- [~] Gemini provider (CLI wired, but Google rejects personal-account login with IneligibleTierError; needs an AI Studio API key route instead. No Gemini usage meter: no source reports remaining quota)
+- [~] Gemini provider via the AI Studio API (key stored with safeStorage, checked on save, then Gemini Flash becomes the conversation model; streams, keeps history, sends screenshots). Unverified until a key is added. The Gemini CLI is not used: Google rejects personal-account login with IneligibleTierError. No Gemini usage meter: no API reports remaining quota
 - [x] Streaming speech: sentences are spoken as the reply streams (Gemini, Claude, local); Codex still speaks after completion
 - [x] Memory gate: general questions get a one-line identity only; the vault is consulted for personal, schedule, work and project questions, with strict meaning-gated retrieval (thresholds measured on the real vault)
 - [x] Graphite glass theme, centered nav, Codex remaining meter in the header

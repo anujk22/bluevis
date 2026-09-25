@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { cleanCommand, extractError, LineBuffer, parseClaudeLine, parseCodexLine, parseOpenAISSELine } from '../src/core/parsers'
+import { cleanCommand, extractError, LineBuffer, parseClaudeLine, parseCodexLine, parseGeminiSSELine, parseOpenAISSELine } from '../src/core/parsers'
 import { applyTaskEvent, newTask } from '../src/core/taskState'
 import { matchProject, route } from '../src/core/router'
 import { parseReply, speakable, splitSentences } from '../src/core/reply'
@@ -55,6 +55,8 @@ describe('claude parser', () => {
 describe('openai sse parser', () => {
   it('parses deltas and done', () => {
     expect(parseOpenAISSELine('data: {"choices":[{"delta":{"content":"Hi"}}]}')).toEqual([{ kind: 'text-delta', text: 'Hi' }])
+    expect(parseGeminiSSELine('data: {"candidates":[{"content":{"parts":[{"text":"plan","thought":true},{"text":"Hi"}]}}]}')).toEqual([{ kind: 'text-delta', text: 'Hi' }])
+    expect(parseGeminiSSELine('data: {"error":{"message":"quota"}}')).toEqual([{ kind: 'error', message: 'quota' }])
     expect(parseOpenAISSELine('data: [DONE]')).toEqual([{ kind: 'done' }])
     expect(parseOpenAISSELine(': keepalive')).toEqual([])
   })
