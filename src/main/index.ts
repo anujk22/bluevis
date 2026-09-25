@@ -8,6 +8,7 @@ import { RelayManager } from './relay'
 import { discoverProjects } from './projects'
 import { HistoryService } from './history'
 import { TerminalManager } from './terminals'
+import { HackathonManager } from './hackathon'
 import { onRateLimits, providerHealth } from './providers'
 import { UsageService } from './usage'
 import { getSecret, setSecret } from './secrets'
@@ -197,6 +198,24 @@ app.whenReady().then(async () => {
   ipcMain.handle('action:dismiss', (_e, id: string) => brain.dismissAction(id))
   ipcMain.handle('memory:undo', (_e, id: string) => brain.undoMemory(id))
   ipcMain.handle('tasks:list', () => tasks.list())
+  const hackathons = new HackathonManager(tasks, vault, (l) => send('hackathons', l))
+  brain.hackathons = hackathons
+  ipcMain.handle('hack:list', () => hackathons.list())
+  ipcMain.handle('hack:from-relay', (_e, relayId: string) => {
+    const r = relays.get(relayId)
+    if (!r) throw new Error('Unknown relay')
+    return hackathons.fromRelay(r)
+  })
+  ipcMain.handle('hack:update', (_e, id: string, patch: Parameters<HackathonManager['update']>[1]) => hackathons.update(id, patch))
+  ipcMain.handle('hack:scaffold', (_e, id: string) => hackathons.scaffold(id))
+  ipcMain.handle('hack:agents', (_e, id: string, ids: string[], agent: 'codex' | 'claude') => hackathons.agents(id, ids, agent))
+  ipcMain.handle('hack:kit', (_e, id: string) => hackathons.kit(id))
+  ipcMain.handle('hack:rehearse', async (_e, id: string, wav: ArrayBuffer, seconds: number) => {
+    const transcript = await voice.transcribe(wav)
+    if (!transcript.trim()) throw new Error('No speech was heard in that take.')
+    return hackathons.rehearse(id, transcript, seconds)
+  })
+
   const terminals = new TerminalManager(send)
   brain.terminals = terminals
   ipcMain.handle('term:create', (_e, o: { cwd?: string; title?: string; command?: string; cols?: number; rows?: number }) => terminals.create(o))

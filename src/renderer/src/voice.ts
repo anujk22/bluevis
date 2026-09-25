@@ -43,7 +43,8 @@ export type ListenResult = { wav: ArrayBuffer } | { cancelled: true; reason: 'si
 
 /**
  * One utterance of push-to-talk capture. Ends after ~1.1s of silence following
- * speech, on a manual stop, or after 30s. Exposes a live level for the orb.
+ * speech, on a manual stop, or after `maxSeconds`. With `untilStop` (pitch
+ * rehearsal) pauses never end it. Exposes a live level for the orb.
  */
 export class Listener {
   level = 0
@@ -51,7 +52,7 @@ export class Listener {
   private ctx: AudioContext | null = null
   private stream: MediaStream | null = null
 
-  async listen(): Promise<ListenResult> {
+  async listen({ maxSeconds = 30, untilStop = false } = {}): Promise<ListenResult> {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
     } catch (e) {
@@ -95,8 +96,8 @@ export class Listener {
           this.stopRequested = false
           return heard ? finish({ wav: encodeWav(downsample(concat(chunks), rate, 16000), 16000) }) : finish({ cancelled: true, reason: 'manual' })
         }
-        if (!heard && elapsed > 7) return finish({ cancelled: true, reason: 'silence' })
-        if ((heard && silentFor > 1.1) || elapsed > 30) finish({ wav: encodeWav(downsample(concat(chunks), rate, 16000), 16000) })
+        if (!untilStop && !heard && elapsed > 7) return finish({ cancelled: true, reason: 'silence' })
+        if ((!untilStop && heard && silentFor > 1.1) || elapsed > maxSeconds) finish({ wav: encodeWav(downsample(concat(chunks), rate, 16000), 16000) })
       }
       src.connect(proc)
       proc.connect(this.ctx!.destination)

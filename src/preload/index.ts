@@ -26,6 +26,15 @@ const api = {
     resize: (id: string, cols: number, rows: number) => ipcRenderer.send('term:resize', id, cols, rows),
     focus: (id: string | null) => ipcRenderer.send('term:focus', id)
   },
+  hackathons: {
+    list: invoke('hack:list'),
+    fromRelay: invoke('hack:from-relay'),
+    update: invoke('hack:update'),
+    scaffold: invoke('hack:scaffold'),
+    agents: invoke('hack:agents'),
+    kit: invoke('hack:kit'),
+    rehearse: invoke('hack:rehearse')
+  },
   history: { list: invoke('history:list'), read: invoke('history:read'), continue: invoke('history:continue') },
   projects: { list: invoke('projects:list'), activate: invoke('project:activate'), reveal: invoke('project:reveal') },
   memory: { atlas: invoke('memory:atlas'), read: invoke('memory:read'), open: invoke('memory:open'), undo: invoke('memory:undo'), revert: invoke('memory:revert'), search: invoke('memory:search') },

@@ -13,14 +13,17 @@ import { Relays } from './views/Relays'
 import { History } from './views/History'
 import type { TerminalInfo } from '../../core/terminal'
 import type { RelayRun } from '../../core/relay'
-import { BASE_HUE, DEFAULT_ACCENT } from '../../core/color'
+import { BASE_HUE, DEFAULT_ACCENT, type Accent } from '../../core/color'
+import { formatLeft, hackStatus, type Hackathon } from '../../core/hackathon'
+
+const LOCKED_IN: Accent = { hue: 25, chroma: 1.6 }
 
 export type View = 'talk' | 'agents' | 'history' | 'relays' | 'memory' | 'settings'
 const NAV: [View, string][] = [
   ['talk', 'Talk'],
   ['agents', 'Work'],
   ['history', 'History'],
-  ['relays', 'Relays'],
+  ['relays', 'Hackathon'],
   ['memory', 'Memory']
 ]
 export interface Ctx {
@@ -55,9 +58,21 @@ export function App() {
   const usage = useUsage()
   const [searchFocus, setSearchFocus] = useState(0)
   const [relays, setRelays] = useState<Record<string, RelayRun>>({})
+  const [hacks, setHacks] = useState<Hackathon[]>([])
   const [focusRelay, setFocusRelay] = useState<string | null>(null)
 
-  const accent = settings?.accent ?? DEFAULT_ACCENT
+  const hack = hacks.find((h) => h.active)
+  // Hackathon mode locks the app into red without touching the saved accent.
+  const accent = hack ? LOCKED_IN : (settings?.accent ?? DEFAULT_ACCENT)
+  const [clock, setClock] = useState(Date.now())
+  useEffect(() => {
+    if (!hack) return
+    const id = setInterval(() => setClock(Date.now()), 30_000)
+    return () => clearInterval(id)
+  }, [hack?.id])
+  // The heartbeat quickens over the last twelve hours before the deadline.
+  const behind = hack ? hackStatus(hack, clock).behind.length : 0
+  const urgency = hack ? Math.min(1, Math.max(0, 1 - (hack.deadline - clock) / (12 * 3600_000))) : 0
   useEffect(() => {
     // The stylesheet rotates its blues by --dh and scales their chroma by --c; both transition smoothly.
     document.documentElement.style.setProperty('--dh', String((((accent.hue - BASE_HUE) % 360) + 540) % 360 - 180))
@@ -75,6 +90,7 @@ export function App() {
     void api.tasks.list().then((l) => setTasks(Object.fromEntries((l as AgentTask[]).map((t) => [t.id, t]))))
     void api.chat.context().then((c) => setCtx(c as Ctx))
     void api.relays.list().then((l) => setRelays(Object.fromEntries((l as RelayRun[]).map((r) => [r.id, r]))))
+    void api.hackathons.list().then((l) => setHacks(l as Hackathon[]))
     void api.settings.get().then((s) => setSettings(s as Settings))
     void api.terminals.list().then((l) => setTerms(l as TerminalInfo[]))
     void api.voice.health().then((h) => setVoice(h as VoiceHealth))
@@ -91,6 +107,7 @@ export function App() {
         })
       ),
       api.on('reset', () => setTurns([])),
+      api.on('hackathons', (l) => setHacks(l as Hackathon[])),
       api.on('relay', (r) => setRelays((prev) => ({ ...prev, [(r as RelayRun).id]: r as RelayRun }))),
       api.on('busy', (b) => setBusy(b as boolean)),
       api.on('task', (t) => setTasks((prev) => ({ ...prev, [(t as AgentTask).id]: t as AgentTask }))),
@@ -202,7 +219,7 @@ export function App() {
     return (
       <div className="compact">
         <button className="stage-orb" onClick={() => api.window.setMode('expanded')} aria-label="Open Bluevis">
-          <Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={176} radius={0.6} accent={accent} />
+          <Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={176} radius={0.6} accent={accent} heartbeat={hack ? urgency : undefined} />
         </button>
         {orbMode !== 'idle' && <span className="compact-dot mono">{caption(orbMode, workers)}</span>}
       </div>
@@ -210,12 +227,13 @@ export function App() {
   }
 
   /** Continue a Codex or Claude thread interactively in a Work terminal. */
-  const openResume = async (provider: 'codex' | 'claude', id: string, cwd: string, title: string) => {
-    const command = provider === 'codex' ? `codex resume ${id}` : `claude --resume ${id}`
-    const t = (await api.terminals.create({ cwd, title, command })) as TerminalInfo
+  const openTerminal = async (o: { cwd: string; title: string; command?: string }) => {
+    const t = (await api.terminals.create(o)) as TerminalInfo
     setTermFocus(t.id)
     setView('agents')
   }
+  const openResume = (provider: 'codex' | 'claude', id: string, cwd: string, title: string) =>
+    openTerminal({ cwd, title, command: provider === 'codex' ? `codex resume ${id}` : `claude --resume ${id}` })
 
   const empty = view === 'talk' && turns.length === 0
   return (
@@ -235,6 +253,18 @@ export function App() {
           ))}
         </nav>
         <div className="header-right">
+          {hack && (
+            <button
+              className="chip hack-chip"
+              data-behind={behind > 0}
+              title={`${hack.title}: ${behind ? `${behind} checkpoint${behind > 1 ? 's' : ''} overdue, ` : ''}submission deadline`}
+              onClick={() => (setFocusRelay(hack.id), setView('relays'))}
+            >
+              <span className="dot" />
+              {behind > 0 && `${behind} behind · `}
+              {formatLeft(hack.deadline - clock)}
+            </button>
+          )}
           {ctx.activeProject && (
             <button className="chip" title="Active project. Click to clear." onClick={() => api.projects.activate()}>
               <span className="dot" />
@@ -272,7 +302,7 @@ export function App() {
             turns={turns}
             tasks={tasks}
             busy={busy}
-            orb={<Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={empty ? 460 : 440} radius={empty ? 0.43 : 0.52} accent={accent} className="stage-orb" />}
+            orb={<Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={empty ? 460 : 440} radius={empty ? 0.43 : 0.52} accent={accent} heartbeat={hack ? urgency : undefined} className="stage-orb" />}
             caption={caption(orbMode, workers, ctx.brainLabel)}
             live={orbMode !== 'idle'}
             listening={listening}
@@ -316,7 +346,21 @@ export function App() {
             onTakeOver={(t) => t.sessionId && openResume(t.choice.provider as 'codex' | 'claude', t.sessionId, t.cwd, t.title)}
           />
         )}
-        {view === 'relays' && <Relays runs={relayList} focus={focusRelay} onFocus={setFocusRelay} />}
+        {view === 'relays' && (
+          <Relays
+            runs={relayList}
+            hacks={hacks}
+            tasks={taskList}
+            focus={focusRelay}
+            onFocus={setFocusRelay}
+            onOpenTerminal={(cwd, title) => openTerminal({ cwd, title })}
+            onOpenTask={(id) => {
+              setTermFocus(null)
+              setFocusTask(id)
+              setView('agents')
+            }}
+          />
+        )}
         {view === 'memory' && <Memory searchFocus={searchFocus} />}
         {view === 'settings' && settings && <SettingsView settings={settings} voice={voice} usage={usage} onChange={setSettings} />}
       </main>

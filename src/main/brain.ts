@@ -10,6 +10,8 @@ import { PERSONA, RESUME_PROMPT, SESSION_PROMPT } from './persona'
 import { agendaText } from './calendar'
 import { canvasBrief } from './canvas'
 import type { TerminalManager } from './terminals'
+import type { HackathonManager } from './hackathon'
+import { hackLine } from '../core/hackathon'
 import { asksAboutTerminal } from '../core/terminal'
 import { discoverProjects } from './projects'
 import { runProvider, localModels, type RunHandle } from './providers'
@@ -58,6 +60,7 @@ export class Brain {
   private workspace = join(app.getPath('userData'), 'workspace')
   relays!: RelayManager
   terminals?: TerminalManager
+  hackathons?: HackathonManager
 
   constructor(
     private vault: Vault,
@@ -248,6 +251,7 @@ export class Brain {
         ? `Active project: ${this.activeProject.name} at ${this.activeProject.path} (branch ${this.activeProject.branch ?? '?'}, ${this.activeProject.dirty ?? 0} uncommitted files). You may read its files.`
         : 'No active project.',
       `Known projects: ${projects.map((p) => p.name).join(', ') || 'none found'}`,
+      this.hackathons?.active() ? hackLine(this.hackathons.active()!, Date.now()) : '',
       running.length ? `Running agents: ${running.map((t) => `${label(t.choice)} on ${t.project ?? t.cwd}: ${t.status}`).join('; ')}` : 'No agents running.',
       screenshot ? 'A screenshot of Anuj’s screen, captured just now at Anuj’s request, is attached.' : ''
     ]

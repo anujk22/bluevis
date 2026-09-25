@@ -49,13 +49,15 @@ interface Props {
   /** Orb radius as a fraction of half the canvas; the rest is room for the halo and satellites. */
   radius?: number
   accent: Accent
+  /** Hackathon mode: a lub-dub pulse instead of a slow breath. 0 = calm, 1 = deadline imminent. */
+  heartbeat?: number
   className?: string
 }
 
-export function Orb({ mode, level, moons, size, radius = 0.5, accent, className }: Props) {
+export function Orb({ mode, level, moons, size, radius = 0.5, accent, heartbeat, className }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null)
-  const target = useRef({ mode, moons, radius })
-  target.current = { mode, moons, radius }
+  const target = useRef({ mode, moons, radius, heartbeat })
+  target.current = { mode, moons, radius, heartbeat }
   const palette = useRef(recolor(accent))
   useEffect(() => {
     palette.current = recolor(accent)
@@ -111,9 +113,9 @@ export function Orb({ mode, level, moons, size, radius = 0.5, accent, className 
 
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame)
-      const { mode: m, moons: mn, radius: rad } = target.current
+      const { mode: m, moons: mn, radius: rad, heartbeat: hb } = target.current
       // Idle orbs only need ~30fps; everything else runs at display rate.
-      const calm = m === 'idle' && mn === 0 && lvl < 0.01
+      const calm = m === 'idle' && mn === 0 && lvl < 0.01 && hb === undefined
       if (calm && now - lastDraw < 32) return
       if (document.hidden) return
       lastDraw = now
@@ -143,9 +145,15 @@ export function Orb({ mode, level, moons, size, radius = 0.5, accent, className 
       const raw = m === 'listening' || m === 'speaking' ? Math.min(1, levelRef.current()) : 0
       lvl = raw > lvl ? mixTo(lvl, raw, 1 - Math.exp(-dt * 30)) : mixTo(lvl, raw, 1 - Math.exp(-dt * 7))
       const motion = reduced ? 0.25 : 1
-      flowTime += dt * cur.flow * motion
       const t = (now - start) / 1000
-      const breath = reduced ? 0 : Math.sin(t * 0.9) * 0.012 + (m === 'approval' ? Math.sin(t * 3) * 0.01 : 0)
+      // Lub-dub: two quick pulses per beat, from ~54 to ~108 beats a minute as the deadline nears.
+      let beat = 0
+      if (hb !== undefined && !reduced) {
+        const ph = (t * (0.9 + hb * 0.9)) % 1
+        beat = Math.exp(-(((ph - 0.04) * 16) ** 2)) + 0.55 * Math.exp(-(((ph - 0.24) * 16) ** 2))
+      }
+      flowTime += dt * cur.flow * motion * (hb !== undefined ? 1.5 : 1)
+      const breath = reduced ? 0 : (hb !== undefined ? beat * 0.016 : Math.sin(t * 0.9) * 0.012) + (m === 'approval' ? Math.sin(t * 3) * 0.01 : 0)
 
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const w = Math.round(c.clientWidth * dpr)
@@ -160,7 +168,7 @@ export function Orb({ mode, level, moons, size, radius = 0.5, accent, className 
       gl.uniform1f(U.flowTime, flowTime)
       gl.uniform1f(U.level, lvl)
       gl.uniform1f(U.wobble, (cur.wobble + cur.levelWobble * lvl) * motion)
-      gl.uniform1f(U.halo, cur.halo + lvl * 0.45 + errorFlash * 0.6)
+      gl.uniform1f(U.halo, cur.halo + lvl * 0.45 + errorFlash * 0.6 + beat * 0.4)
       gl.uniform1f(U.breath, breath)
       gl.uniform1f(U.fil, cur.fil)
       gl.uniform3fv(U.core, cur.core)

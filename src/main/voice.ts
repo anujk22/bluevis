@@ -6,7 +6,7 @@ import type { VoiceHealth } from '../core/types'
 const PORT = 47821
 const BASE = `http://127.0.0.1:${PORT}`
 /** Must match VERSION in voice/server.py. */
-const SIDECAR_VERSION = 3
+const SIDECAR_VERSION = 4
 
 /** Manages the local Python voice sidecar (Whisper STT + Kokoro TTS on MLX). */
 export class VoiceService {
