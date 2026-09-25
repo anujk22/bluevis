@@ -431,6 +431,17 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
         </div>
 
         <div className="section">
+          <h3>Daily brief</h3>
+          <p>Calendar, Canvas, recruiting email and overnight agents, spoken in under a minute. Say “brief me” any time.</p>
+          <div className="field">
+            <label>Brief me each morning</label>
+            <div className="ctrl">
+              <button className="switch" role="switch" aria-checked={!!settings.morningBrief} aria-label="Brief me each morning" onClick={() => save({ morningBrief: !settings.morningBrief })} />
+            </div>
+          </div>
+        </div>
+
+        <div className="section">
           <h3>Canvas</h3>
           <p>Assignments with whether you submitted them, grades and announcements. Read-only; the token stays in your keychain.</p>
           <Canvas settings={settings} save={save} />

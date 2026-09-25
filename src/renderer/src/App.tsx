@@ -150,6 +150,21 @@ export function App() {
   const sendRef = useRef(send)
   sendRef.current = send
 
+  // Morning brief: the first time the full window is up between 5am and noon, once per day.
+  useEffect(() => {
+    if (!settings?.morningBrief || winMode !== 'expanded') return
+    const now = new Date()
+    const today = now.toDateString()
+    if (now.getHours() < 5 || now.getHours() >= 12) return
+    try {
+      if (localStorage.getItem('bluevis:lastBrief') === today) return
+      localStorage.setItem('bluevis:lastBrief', today)
+    } catch {
+      return
+    }
+    void sendRef.current('Brief me')
+  }, [settings?.morningBrief, winMode])
+
   const toggleListen = useCallback(async () => {
     if (listener.current) {
       listener.current.stop()

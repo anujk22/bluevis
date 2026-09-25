@@ -135,6 +135,9 @@ describe('router', () => {
 
   it('strips the wake word', () => {
     expect(route('Hey Bluevis, status?', projects)).toEqual({ type: 'status' })
+    expect(route('Good morning', projects)).toEqual({ type: 'brief' })
+    expect(route("what's my day look like?", projects)).toEqual({ type: 'brief' })
+    expect(route('brief me', projects)).toEqual({ type: 'brief' })
   })
 
   it('handles sessions and memory', () => {

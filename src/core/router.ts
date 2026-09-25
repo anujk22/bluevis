@@ -12,6 +12,7 @@ export type Intent =
   | { type: 'end-session'; project?: string }
   | { type: 'remember'; text: string; kind: 'idea' | 'fact'; private: boolean }
   | { type: 'status' }
+  | { type: 'brief' }
   | { type: 'stop-task'; agent?: AgentName }
   | { type: 'stop-speech' }
   | { type: 'switch-brain'; provider: 'codex' | 'claude' | 'gemini' | 'local' }
@@ -85,6 +86,8 @@ export function route(raw: string, projects: string[] = []): Intent {
     const { prompt, project } = splitProject(prefix[2].trim(), projects)
     return { type: 'delegate', agent: prefix[1].toLowerCase() as AgentName, prompt, project }
   }
+
+  if (/^(?:good morning|(?:give me )?(?:my |the |a )?(?:morning |daily )?brief(?:ing)?(?: me)?|brief me|what'?s my day(?: look(?:ing)? like)?|how'?s my day looking)[.!?]*$/.test(lower)) return { type: 'brief' }
 
   if (/^(status|what'?s running|what(?:'s| is) (?:the agent|codex|claude) doing|agent status|what are the agents doing)$/.test(lower)) {
     return { type: 'status' }

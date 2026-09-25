@@ -144,6 +144,8 @@ export class Brain {
       }
       case 'status':
         return this.status()
+      case 'brief':
+        return this.brief()
       case 'stop-task': {
         const running = this.tasks.active().filter((t) => !intent.agent || t.choice.provider === intent.agent)
         if (!running.length) return this.say('Nothing is running.')
@@ -450,6 +452,65 @@ Constraints:
     if (r.code !== 0) await run('open', [p.path])
     this.setProject(p)
     this.say(r.code === 0 ? `Opened ${p.name} in ${editor}.` : `Opened ${p.name} in Finder. ${editor} wasn't available.`)
+  }
+
+  private lastBriefAt = 0
+
+  /** The day in under a minute: calendar, Canvas, recruiting email, finished agents, hackathon. Sources are fetched in parallel. */
+  private async brief() {
+    this.ev.busy(true)
+    const since = this.lastBriefAt || Date.now() - 16 * 3600_000
+    const [cal, canvas, mail] = await Promise.all([
+      agendaText(2),
+      canvasBrief(),
+      this.recruitingDigest().catch((e: Error) => `(Gmail unavailable: ${e.message})`)
+    ])
+    const finished = this.tasks.list().filter((t) => (t.endedAt ?? 0) > since)
+    const agents = finished.length
+      ? finished.map((t) => `- ${t.title} (${label(t.choice)}, ${t.project ?? t.cwd}): ${t.status}${t.finalMessage ? `. ${t.finalMessage.replace(/\s+/g, ' ').slice(0, 300)}` : ''}`).join('\n')
+      : '(No agent runs finished since the last brief.)'
+    this.lastBriefAt = Date.now()
+    this.ev.busy(false)
+    const ctx = [
+      `<calendar source="ICS feeds, today and tomorrow">\n${cal}\n</calendar>`,
+      canvas ? `<canvas source="Canvas API">\n${canvas}\n</canvas>` : '',
+      `<recruiting_email source="Gmail, read-only, last 14 days">\n${mail}\n</recruiting_email>`,
+      `<agents_finished>\n${agents}\n</agents_finished>`
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+    return this.chat(
+      'Give me my brief. Speak it in under 45 seconds: the next thing on my calendar, anything due soon that I have not submitted, recruiting deadlines, and what agents finished. Lead with whatever is most urgent. Skip empty sections. Put the full detail after the separator.',
+      undefined,
+      ctx
+    )
+  }
+
+  /** Recruiting emails that need action, as plain lines. Uses Claude with read-only Gmail tools; capped at 75 seconds. */
+  private recruitingDigest(): Promise<string> {
+    const now = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'full', timeStyle: 'short' })
+    return new Promise((resolve, reject) => {
+      let text = ''
+      let failed: string | null = null
+      const handle = runProvider({
+        choice: { provider: 'claude', model: 'sonnet', effort: 'low' },
+        prompt: `Now: ${now} (America/New_York). Using the Gmail tools (read-only), find recruiting emails from the last 14 days that need action or have a deadline: online assessments, interview scheduling, offers, forms. Reply with one line per item: date, sender, subject, deadline in America/New_York if stated, action needed. Newest deadlines first. If none, reply "None found" and name the searches you ran.`,
+        cwd: this.workspace,
+        role: 'brain',
+        tools: GMAIL_READ,
+        denyTools: GMAIL_WRITE,
+        onEvent: (e) => {
+          if (e.kind === 'message') text = e.text
+          if (e.kind === 'error') failed = e.message
+        }
+      })
+      const timer = setTimeout(() => handle.stop(), 75_000)
+      void handle.done.then(() => {
+        clearTimeout(timer)
+        if (text) resolve(text)
+        else reject(new Error(failed ?? 'no answer'))
+      })
+    })
   }
 
   private async status() {

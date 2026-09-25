@@ -172,6 +172,8 @@ export interface Settings {
   accent?: Accent
   /** Canvas base URL; the access token lives in the keychain. */
   canvasUrl?: string
+  /** Speak the daily brief the first time Bluevis opens each morning. */
+  morningBrief?: boolean
 }
 
 export interface ProviderHealth {

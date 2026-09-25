@@ -36,7 +36,7 @@ function greeting(): string {
 const SUGGESTIONS = [
   { text: 'What do you know about me?', icon: <Person /> },
   { text: 'Where did I leave off?', send: 'Where did I leave off on Bluevis?', icon: <Clock /> },
-  { text: 'Show my status', send: 'Status', icon: <Bars /> },
+  { text: 'Brief me', send: 'Brief me', icon: <Bars /> },
   { text: 'Explain this screen', look: true, icon: <Book /> }
 ]
 
