@@ -43,6 +43,7 @@ function setMode(m: Mode, focus = true) {
   mode = m
   send('window:mode', m)
   win.setAlwaysOnTop(m === 'compact', 'floating')
+  win.setWindowButtonVisibility(m === 'expanded')
   win.setBounds(boundsFor(m), true)
   win.setResizable(m === 'expanded')
   if (!win.isVisible()) win.show()
@@ -54,13 +55,13 @@ function createWindow() {
     ...boundsFor('expanded'),
     minWidth: 160,
     minHeight: 160,
-    frame: false,
+    // Native traffic lights sit inside the glass header; the rest of the chrome is ours.
     transparent: true,
     backgroundColor: '#00000000',
     hasShadow: false,
     show: false,
     titleBarStyle: 'hidden',
-    trafficLightPosition: { x: -100, y: -100 },
+    trafficLightPosition: { x: 32, y: 34 },
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, backgroundThrottling: false }
   })
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
@@ -224,6 +225,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('window:mode', (_e, m: Mode) => setMode(m))
   ipcMain.handle('window:get-mode', () => mode)
   ipcMain.handle('window:hide', () => win?.hide())
+  ipcMain.handle('app:quit', () => app.quit())
   ipcMain.handle('screen:capture', () => captureScreen())
   ipcMain.handle('screen:discard', (_e, path: string) => {
     if (path.startsWith(app.getPath('temp'))) rmSync(path, { force: true })

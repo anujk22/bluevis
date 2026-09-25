@@ -7,6 +7,7 @@ import { matchProject, route, type Intent } from '../core/router'
 import type { RelayRun } from '../core/relay'
 import type { AgentTask, ModelChoice, Project, Settings, Turn, TurnAction } from '../core/types'
 import { PERSONA, RESUME_PROMPT, SESSION_PROMPT } from './persona'
+import { agendaText } from './calendar'
 import { discoverProjects } from './projects'
 import { runProvider, localModels, type RunHandle } from './providers'
 import { getSettings, updateSettings } from './settings'
@@ -155,6 +156,8 @@ export class Brain {
         return
       case 'mail':
         return this.mail(intent.text)
+      case 'agenda':
+        return this.chat(intent.text, undefined, `<calendar source="your ICS feeds, fetched just now">\n${await agendaText()}\n</calendar>`)
       case 'relay': {
         const run = this.relays.start(intent.url, intent.note)
         return this.say('Relay started. Opus ideates, Astra challenges, then Opus consolidates. You can watch every step.', { relayId: run.id })
@@ -216,7 +219,7 @@ export class Brain {
     })
   }
 
-  private async chat(text: string, screenshot?: string) {
+  private async chat(text: string, screenshot?: string, extra = '') {
     const s = getSettings()
     const choice = s.brain
     const allowPrivate = choice.provider === 'local'
@@ -234,7 +237,7 @@ export class Brain {
     ]
       .filter(Boolean)
       .join('\n')
-    const prompt = `<situation>\n${env}\n</situation>\n\n<knowledge>\n${knowledge || '(nothing relevant in the vault)'}\n</knowledge>\n\nAnuj${screenshot ? ' (looking at the screen)' : ''}: ${text}`
+    const prompt = `<situation>\n${env}\n</situation>\n${extra ? `\n${extra}\n` : ''}\n<knowledge>\n${knowledge || '(nothing relevant in the vault)'}\n</knowledge>\n\nAnuj${screenshot ? ' (looking at the screen)' : ''}: ${text}`
 
     const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: label(choice), sources: used })
     this.ev.busy(true)

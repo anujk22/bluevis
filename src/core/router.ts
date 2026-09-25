@@ -18,6 +18,7 @@ export type Intent =
   | { type: 'new-conversation' }
   | { type: 'relay'; url: string; note?: string }
   | { type: 'mail'; text: string }
+  | { type: 'agenda'; text: string }
 
 const AGENT_WORDS: Record<string, { agent: AgentName; model?: string }> = {
   codex: { agent: 'codex' },
@@ -107,6 +108,10 @@ export function route(raw: string, projects: string[] = []): Intent {
   // Questions about email go to Claude with read-only Gmail tools.
   if (/\b(e-?mails?|inbox|gmail|mailbox|OAs?|online assessments?|hackerrank|codesignal|recruiters?|interview (?:invites?|requests?)|rejections?|offers? letters?)\b/i.test(text) && !/^(remember|note|save)\b/i.test(lower)) {
     return { type: 'mail', text }
+  }
+
+  if (/\b(calendar|schedule|agenda|what'?s (on|coming up|today|tomorrow)|due (today|tomorrow|this week|soon)|deadlines?|assignments?|homework|canvas|class(es)? (today|tomorrow)|free (today|tomorrow|this))\b/i.test(text) && !/^(remember|note|save)\b/i.test(lower)) {
+    return { type: 'agenda', text }
   }
 
   const open = lower.match(/^(?:open|pull up|show me|go to)\s+(?:the\s+)?(.+?)(?:\s+(?:project|repo|folder))?$/)

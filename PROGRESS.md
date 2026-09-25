@@ -61,7 +61,18 @@ Nothing loads the whole vault. Per turn Bluevis sends: `Profile/Core.md` (~1.3k 
 - [x] Hybrid retrieval (BM25 + embeddings + aliases), sources shown on replies, Memory search
 - [x] Sidecar versioning: a stale sidecar from before an update is replaced, not adopted
 
-### Phase 5: next up
+### Phase 5: integrations and polish (done)
+- [x] Hackathon relay (Devpost → Opus ideate → Astra challenge → Opus consolidate), live pipeline view, plan saved to `Outputs/Hackathons/` (verified end to end on HackNYU 2025, ~9 min)
+- [x] Read-only Gmail through Claude's Gmail connector (write tools explicitly denied), every search shown under the reply
+- [x] Calendar + Canvas via private ICS feeds (Settings → Calendars), recurrences, time zones
+- [x] Usage remaining for Codex (session logs) and Claude (rate-limit events) in the model menu and Settings
+- [x] Pocket TTS voices + one-click voice picker with previews; Kokoro kept as the fast option
+- [x] Glass redesign (navy fog, pearl orb, glass header/cards/composer), native traffic lights, menu bar icon, orb app icon
+- [x] Installable app: `npx electron-builder --mac dir` then copy `dist/mac-arm64/Bluevis.app` to /Applications
+- [ ] GPT image generation as an MCP tool for Claude (Codex image_generation works from exec, ~60s/image)
+- [ ] Gemini provider (Gemini CLI not installed yet)
+
+### Phase 6: next up
 - [x] Link vault project notes to repos by `path:` (Yonder → `Hackathons/Shopify`, observed from its git remote)
 - [x] ChatGPT export importer (Memory → Teach and review): active-branch parsing, batched extraction with Codex `--output-schema`, review queue with keep/edit/discard, ledger in `vault/.bluevis/imports.json` so re-imports skip processed threads and never resurrect discarded items
 - [x] "In your own words" dump → proposals through the same pipeline (voice input for it still to do)

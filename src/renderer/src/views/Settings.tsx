@@ -90,6 +90,48 @@ function VoicePicker({ value, ready, onPick }: { value: string; ready: boolean; 
   )
 }
 
+function Calendars({ settings, save }: { settings: Settings; save: (p: Partial<Settings>) => Promise<void> }) {
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const feeds = settings.calendarFeeds ?? []
+  const valid = /^(https?|webcal):\/\/\S+/i.test(url.trim()) && name.trim()
+  return (
+    <div>
+      {feeds.map((f, i) => (
+        <div key={f.url} className="field">
+          <label>{f.name}</label>
+          <div className="ctrl">
+            <span className="mono" style={{ color: 'var(--mist)' }}>
+              {f.url.replace(/^(\w+:\/\/[^/]+).*$/, '$1/•••')}
+            </span>
+            <button className="link-btn" onClick={() => save({ calendarFeeds: feeds.filter((_, j) => j !== i) })}>
+              Remove
+            </button>
+          </div>
+        </div>
+      ))}
+      <div className="field">
+        <label>Add a feed</label>
+        <div className="ctrl">
+          <input className="input" style={{ minWidth: 120, width: 140 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. Canvas)" aria-label="Feed name" />
+          <input className="input mono" style={{ flex: 1 }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://… .ics" aria-label="Feed link" type="password" />
+          <button
+            className="btn"
+            disabled={!valid}
+            onClick={async () => {
+              await save({ calendarFeeds: [...feeds, { name: name.trim(), url: url.trim() }] })
+              setName('')
+              setUrl('')
+            }}
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ModelPicker({ value, onChange, localModels, allowLocal = true }: { value: ModelChoice; onChange: (c: ModelChoice) => void; localModels: string[]; allowLocal?: boolean }) {
   const models = value.provider === 'codex' ? CODEX_MODELS : value.provider === 'claude' ? CLAUDE_MODELS : localModels
   return (
@@ -229,6 +271,14 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
             </div>
           </div>
           <VoicePicker value={settings.voice.ttsVoice} ready={voice.state === 'ready'} onPick={(ttsVoice) => save({ voice: { ...settings.voice, ttsVoice } })} />
+        </div>
+
+        <div className="section">
+          <h3>Calendars</h3>
+          <p>
+            Read-only feeds. Google Calendar: Settings → your calendar → Integrate calendar → Secret address in iCal format. Canvas: Calendar → Calendar feed. Then ask “what's due this week?”
+          </p>
+          <Calendars settings={settings} save={save} />
         </div>
 
         <div className="section">

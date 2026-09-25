@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { AgentTask, Turn, VoiceHealth } from '../../../core/types'
 import type { Shot } from '../App'
-import { Arrow, Eye, Mic, Square } from '../components/icons'
+import { Arrow, ArrowRight, Bars, Book, Clip, Clock, Eye, Mic, Person, Square } from '../components/icons'
 import { Inline, Markdown } from '../components/Markdown'
 import { TaskStatus } from '../components/TaskStatus'
 import { RelayInline } from './Relays'
@@ -33,7 +33,37 @@ function greeting(): string {
   return h < 5 ? 'Still up' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
 }
 
-const SUGGESTIONS = ['What do you know about me?', 'Where did I leave off on Bluevis?', 'Status', 'Explain this screen']
+const SUGGESTIONS = [
+  { text: 'What do you know about me?', icon: <Person /> },
+  { text: 'Where did I leave off?', send: 'Where did I leave off on Bluevis?', icon: <Clock /> },
+  { text: 'Show my status', send: 'Status', icon: <Bars /> },
+  { text: 'Explain this screen', look: true, icon: <Book /> }
+]
+
+function useNow() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 20_000)
+    return () => clearInterval(id)
+  }, [])
+  return now
+}
+
+/** Real readiness, not a decorative "all good". */
+function StatusCorner({ voice, busy }: { voice: VoiceHealth; busy: boolean }) {
+  const ok = voice.state === 'ready'
+  const label = busy ? 'Working' : ok ? 'Ready' : voice.state === 'starting' ? 'Warming up' : 'Text only'
+  const detail = ok ? 'Voice and memory are local' : voice.state === 'starting' ? voice.detail : voice.detail || 'Voice is off'
+  return (
+    <div className="corner corner-left" aria-live="polite">
+      <div className="eyebrow">
+        <span className="dot" data-ok={ok} />
+        {label}
+      </div>
+      <div className="mono corner-sub">{detail}</div>
+    </div>
+  )
+}
 
 export function Talk(p: Props) {
   const empty = p.turns.length === 0
@@ -52,9 +82,14 @@ export function Talk(p: Props) {
   }, [p.turns])
 
   const composer = <Composer {...p} />
+  const now = useNow()
 
   return (
     <div className="talk" data-empty={empty}>
+      <StatusCorner voice={p.voice} busy={p.busy} />
+      <div className="corner corner-right eyebrow">
+        {now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+      </div>
       <div className="stage">
         <div onClick={p.onOrb} role="button" tabIndex={-1} aria-label="Talk to Bluevis" style={{ pointerEvents: 'auto', cursor: 'pointer', borderRadius: '50%' }}>
           {p.orb}
@@ -72,12 +107,17 @@ export function Talk(p: Props) {
         <p>Ask, delegate, or pick up where you left off. Everything worth keeping lands in your vault.</p>
         <div className="suggestions">
           {SUGGESTIONS.map((s) => (
-            <button key={s} onClick={() => (s === 'Explain this screen' ? p.onShot() : p.onSend(s))}>
-              {s}
+            <button key={s.text} className="suggestion glass" onClick={() => (s.look ? p.onShot() : p.onSend(s.send ?? s.text))}>
+              <span className="s-icon">{s.icon}</span>
+              <span className="s-text">{s.text}</span>
+              <span className="s-go">
+                <ArrowRight />
+              </span>
             </button>
           ))}
         </div>
         {empty && composer}
+        {empty && <div className="footnote eyebrow">⌥⇧Space to talk · ⌥⇧L to look · ⌥Space to hide</div>}
       </div>
 
       <section className="conversation" aria-label="Conversation">
@@ -116,29 +156,33 @@ function Composer(p: Props) {
           {p.notice}
         </p>
       )}
-      <div className="composer">
+      <div className="composer glass" data-attached={!!p.shot}>
         {p.shot && (
           <div className="attachment">
             <img src={p.shot.preview} alt="Screenshot to send" />
             <span className="mono">Screen attached · sent with your next message</span>
           </div>
         )}
-        <textarea
-          ref={ref}
-          rows={1}
-          value={text}
-          placeholder={p.shot ? 'What about it?' : 'Ask Bluevis, or “have Codex…”'}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              submit()
-            }
-            if (e.key === 'Escape') p.onStop()
-          }}
-          aria-label="Message Bluevis"
-        />
-        <div className="composer-bar">
+        <div className="composer-row">
+          <button className="round" aria-pressed={!!p.shot} onClick={p.onShot} title="Look at my screen (⌥⇧L)" aria-label="Attach a screenshot">
+            {p.shot ? <Eye /> : <Clip />}
+          </button>
+          <span className="composer-sep" aria-hidden="true" />
+          <textarea
+            ref={ref}
+            rows={1}
+            value={text}
+            placeholder={p.shot ? 'What about it?' : 'Ask anything, delegate a task, or continue…'}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                submit()
+              }
+              if (e.key === 'Escape') p.onStop()
+            }}
+            aria-label="Message Bluevis"
+          />
           <button
             className="round"
             aria-pressed={p.listening}
@@ -148,16 +192,13 @@ function Composer(p: Props) {
           >
             <Mic />
           </button>
-          <button className="round" aria-pressed={!!p.shot} onClick={p.onShot} title="Look at my screen (⌥⇧L)" aria-label="Attach a screenshot">
-            <Eye />
-          </button>
-          <span className="hint mono">{p.voice.state === 'ready' ? '⌥⇧Space talk · ⌥⇧L look' : p.voice.state === 'starting' ? 'Voice loading…' : 'Voice off'}</span>
+          <span className="composer-sep" aria-hidden="true" />
           {p.busy ? (
-            <button className="round send" onClick={p.onStop} aria-label="Stop (Esc)" title="Stop (Esc)">
+            <button className="send" onClick={p.onStop} aria-label="Stop (Esc)" title="Stop (Esc)">
               <Square />
             </button>
           ) : (
-            <button className="round send" onClick={submit} aria-label="Send" disabled={!text.trim()}>
+            <button className="send" onClick={submit} aria-label="Send" disabled={!text.trim()}>
               <Arrow />
             </button>
           )}

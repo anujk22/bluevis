@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentTask, ModelChoice, OrbMode, Settings, Turn, VoiceHealth } from '../../core/types'
-import { Close, Gear, Shrink } from './components/icons'
-import { UsageChips, useUsage } from './components/Usage'
+import { Search } from './components/icons'
+import { useUsage } from './components/Usage'
+import { AccountMenu, AttentionMenu, ModelMenu } from './components/HeaderMenus'
 import { Orb } from './orb/Orb'
 import { Listener, Speaker } from './voice'
 import { Talk } from './views/Talk'
@@ -40,6 +41,7 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null)
   const [focusTask, setFocusTask] = useState<string | null>(null)
   const usage = useUsage()
+  const [searchFocus, setSearchFocus] = useState(0)
   const [relays, setRelays] = useState<Record<string, RelayRun>>({})
   const [focusRelay, setFocusRelay] = useState<string | null>(null)
 
@@ -186,9 +188,10 @@ export function App() {
   const empty = view === 'talk' && turns.length === 0
   return (
     <div className="shell" data-empty={empty}>
-      <header className="header">
+      <header className="header glass">
         <div className="wordmark">
-          bluevis<i />
+          <i />
+          bluevis
         </div>
         <nav className="nav" aria-label="Sections">
           {(['talk', 'agents', 'relays', 'memory'] as const).map((v) => (
@@ -200,25 +203,35 @@ export function App() {
           ))}
         </nav>
         <div className="header-right">
-          <UsageChips usage={usage} onOpen={() => setView('settings')} />
           {ctx.activeProject && (
             <button className="chip" title="Active project. Click to clear." onClick={() => api.projects.activate()}>
               <span className="dot" />
               {ctx.activeProject}
             </button>
           )}
-          <button className="chip" title="Conversation model" onClick={() => setView('settings')}>
-            {ctx.brainLabel ?? '…'}
+          <ModelMenu settings={settings} label={ctx.brainLabel} usage={usage} onChange={setSettings} />
+          <button
+            className="icon-btn"
+            aria-label="Search your vault"
+            title="Search your vault"
+            onClick={() => {
+              setSearchFocus((n) => n + 1)
+              setView('memory')
+            }}
+          >
+            <Search />
           </button>
-          <button className="icon-btn" aria-label="Settings" aria-pressed={view === 'settings'} onClick={() => setView(view === 'settings' ? 'talk' : 'settings')}>
-            <Gear />
-          </button>
-          <button className="icon-btn" aria-label="Shrink to orb (⌥Space)" title="Shrink to orb (⌥Space)" onClick={() => api.window.setMode('compact')}>
-            <Shrink />
-          </button>
-          <button className="icon-btn" aria-label="Hide" title="Hide (⌥Space brings it back)" onClick={() => api.window.hide()}>
-            <Close />
-          </button>
+          <AttentionMenu
+            turns={turns}
+            tasks={taskList}
+            relays={relayList}
+            onGo={(where, id) => {
+              if (where === 'agents' && id) setFocusTask(id)
+              if (where === 'relays' && id) setFocusRelay(id)
+              setView(where)
+            }}
+          />
+          <AccountMenu onSettings={() => setView('settings')} />
         </div>
       </header>
       <main className="view" key={view}>
@@ -227,7 +240,7 @@ export function App() {
             turns={turns}
             tasks={tasks}
             busy={busy}
-            orb={<Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={empty ? 460 : 440} radius={empty ? 0.5 : 0.56} className="stage-orb" />}
+            orb={<Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={empty ? 460 : 440} radius={empty ? 0.43 : 0.52} className="stage-orb" />}
             caption={caption(orbMode, workers, ctx.brainLabel)}
             live={orbMode !== 'idle'}
             listening={listening}
@@ -260,7 +273,7 @@ export function App() {
         )}
         {view === 'agents' && <Agents tasks={taskList} focus={focusTask} onFocus={setFocusTask} settings={settings} />}
         {view === 'relays' && <Relays runs={relayList} focus={focusRelay} onFocus={setFocusRelay} />}
-        {view === 'memory' && <Memory />}
+        {view === 'memory' && <Memory searchFocus={searchFocus} />}
         {view === 'settings' && settings && <SettingsView settings={settings} voice={voice} usage={usage} onChange={setSettings} />}
       </main>
     </div>

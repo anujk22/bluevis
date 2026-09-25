@@ -40,7 +40,7 @@ export function until(ms?: number) {
   return h < 48 ? `resets in ${h}h` : `resets in ${Math.round(h / 24)}d`
 }
 
-/** Header meters: the tightest window per tool. */
+/** Header meters: remaining allowance in each tool's tightest window. */
 export function UsageChips({ usage, onOpen }: { usage: UsageState; onOpen: () => void }) {
   const chips = (['codex', 'claude'] as const)
     .map((p) => {
@@ -54,12 +54,12 @@ export function UsageChips({ usage, onOpen }: { usage: UsageState; onOpen: () =>
   return (
     <button className="usage-chips" onClick={onOpen} title="Subscription usage. Click for details.">
       {chips.map(({ p, w, s }) => (
-        <span key={p} className="usage-chip" data-high={w.usedPercent >= 80} title={`${p} ${w.name}: ${w.usedPercent}% used, ${until(w.resetsAt)} (observed ${ago(s.observedAt)})`}>
+        <span key={p} className="usage-chip" data-high={w.usedPercent >= 80} title={`${p} ${w.name}: ${Math.max(0, Math.round(100 - w.usedPercent))}% left, ${until(w.resetsAt)} (observed ${ago(s.observedAt)})`}>
           <span className="mono">{p === 'codex' ? 'Codex' : 'Claude'}</span>
           <span className="meter">
-            <i style={{ width: `${Math.min(100, w.usedPercent)}%` }} />
+            <i style={{ width: `${Math.max(0, 100 - w.usedPercent)}%` }} />
           </span>
-          <span className="mono pct">{Math.round(w.usedPercent)}%</span>
+          <span className="mono pct">{Math.max(0, Math.round(100 - w.usedPercent))}% left</span>
         </span>
       ))}
     </button>
@@ -87,11 +87,11 @@ export function UsageDetail({ usage }: { usage: UsageState }) {
                   <div className="row">
                     <span>{w.name}</span>
                     <span className="mono" style={{ marginLeft: 'auto' }}>
-                      {w.usedPercent}% used · {until(w.resetsAt)}
+                      {Math.max(0, Math.round((100 - w.usedPercent) * 10) / 10)}% left · {until(w.resetsAt)}
                     </span>
                   </div>
                   <div className="meter wide" data-high={w.usedPercent >= 80}>
-                    <i style={{ width: `${Math.min(100, w.usedPercent)}%` }} />
+                    <i style={{ width: `${Math.max(0, 100 - w.usedPercent)}%` }} />
                   </div>
                 </div>
               ))

@@ -17,16 +17,17 @@ interface Look {
   fil: number
 }
 
-const BLUE = { core: hex('#010518'), mid: hex('#1737F5'), hi: hex('#A8CBFF'), rim: hex('#3E68FF') }
+// Pearl palette: deep sky core, pale body, near-white highlights, cool rim.
+const PEARL = { core: hex('#3862b8'), mid: hex('#7fa6e6'), hi: hex('#e6f0ff'), rim: hex('#c4dcff') }
 
 const LOOKS: Record<OrbMode, Look> = {
-  idle: { ...BLUE, flow: 0.1, wobble: 0.008, levelWobble: 0, halo: 0.5, fil: 0.75 },
-  listening: { ...BLUE, mid: hex('#2150FF'), hi: hex('#CBE6FF'), rim: hex('#86B6FF'), flow: 0.16, wobble: 0.012, levelWobble: 0.16, halo: 0.95, fil: 0.9 },
-  thinking: { ...BLUE, hi: hex('#BBD6FF'), flow: 0.62, wobble: 0.006, levelWobble: 0, halo: 0.72, fil: 1.25 },
-  speaking: { ...BLUE, hi: hex('#C6DEFF'), rim: hex('#5A82FF'), flow: 0.2, wobble: 0.01, levelWobble: 0.11, halo: 0.8, fil: 1.0 },
-  acting: { ...BLUE, flow: 0.2, wobble: 0.008, levelWobble: 0, halo: 0.6, fil: 0.9 },
-  approval: { ...BLUE, hi: hex('#FFE2B0'), rim: hex('#FFB547'), flow: 0.14, wobble: 0.008, levelWobble: 0, halo: 0.75, fil: 0.8 },
-  error: { core: hex('#07060C'), mid: hex('#2B3155'), hi: hex('#FFB3B5'), rim: hex('#FF5A5F'), flow: 0.06, wobble: 0.004, levelWobble: 0, halo: 0.5, fil: 0.4 }
+  idle: { ...PEARL, flow: 0.08, wobble: 0.006, levelWobble: 0, halo: 0.55, fil: 0.7 },
+  listening: { ...PEARL, mid: hex('#9cc0f6'), rim: hex('#d4e6ff'), flow: 0.14, wobble: 0.01, levelWobble: 0.16, halo: 0.95, fil: 0.9 },
+  thinking: { ...PEARL, core: hex('#355fc0'), flow: 0.55, wobble: 0.005, levelWobble: 0, halo: 0.75, fil: 1.3 },
+  speaking: { ...PEARL, rim: hex('#cfe2ff'), flow: 0.18, wobble: 0.008, levelWobble: 0.11, halo: 0.85, fil: 1.0 },
+  acting: { ...PEARL, flow: 0.18, wobble: 0.006, levelWobble: 0, halo: 0.62, fil: 0.9 },
+  approval: { ...PEARL, hi: hex('#fff1dc'), rim: hex('#ffc46b'), flow: 0.12, wobble: 0.006, levelWobble: 0, halo: 0.8, fil: 0.8 },
+  error: { core: hex('#2c3350'), mid: hex('#6f7896'), hi: hex('#ffd9da'), rim: hex('#ff7a7e'), flow: 0.05, wobble: 0.004, levelWobble: 0, halo: 0.55, fil: 0.4 }
 }
 
 interface Props {

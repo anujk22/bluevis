@@ -20,7 +20,7 @@ const api = {
   settings: { get: invoke('settings:get'), set: invoke('settings:set') },
   providers: { health: invoke('providers:health') },
   voice: { start: invoke('voice:start'), stop: invoke('voice:stop'), health: invoke('voice:health'), stt: invoke('voice:stt'), tts: invoke('voice:tts') },
-  window: { setMode: invoke('window:mode'), getMode: invoke('window:get-mode'), hide: invoke('window:hide') },
+  window: { setMode: invoke('window:mode'), getMode: invoke('window:get-mode'), hide: invoke('window:hide'), quit: invoke('app:quit') },
   relays: { list: invoke('relays:list'), start: invoke('relays:start'), stop: invoke('relays:stop') },
   usage: { get: invoke('usage:get'), refreshClaude: invoke('usage:refresh-claude') },
   importer: {

@@ -198,7 +198,17 @@ export class Vault {
     // bge-small similarities cluster together, so only near-best semantic matches count.
     const best = semantic ? Math.max(...semantic) : 0
     const cutoff = Math.max(0.55, best - 0.08)
-    const picked = fuse(keyword, semantic, opts.limit ?? 6, cutoff)
+    // Generated outputs and session logs rank below real knowledge, and no note may crowd out others.
+    const derived = (i: number) => /^(Outputs|Sessions)$/.test(passages[i].area)
+    const perNote = new Map<string, number>()
+    const picked = fuse(keyword, semantic, (opts.limit ?? 6) * 4, cutoff)
+      .sort((a, b) => Number(derived(a)) - Number(derived(b)))
+      .filter((i) => {
+        const n = perNote.get(passages[i].path) ?? 0
+        perNote.set(passages[i].path, n + 1)
+        return n < 2
+      })
+      .slice(0, opts.limit ?? 6)
     const project = opts.project?.toLowerCase()
     const projectFirst = project ? passages.findIndex((p) => p.area === 'Projects' && p.title.toLowerCase() === project && allowed(p)) : -1
     if (projectFirst >= 0 && !picked.includes(projectFirst)) picked.unshift(projectFirst)

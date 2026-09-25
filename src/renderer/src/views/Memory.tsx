@@ -36,7 +36,7 @@ function when(at: number) {
   return sameDay ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-export function Memory() {
+export function Memory({ searchFocus = 0 }: { searchFocus?: number }) {
   const api = window.bluevis
   const [atlas, setAtlas] = useState<Atlas | null>(null)
   const { proposals, state: importState } = useProposals()
@@ -136,7 +136,7 @@ export function Memory() {
                 void runSearch(query)
               }}
             >
-              <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by meaning, e.g. “how are my grades”" aria-label="Search your vault" />
+              <input className="input" autoFocus={searchFocus > 0} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by meaning, e.g. “how are my grades”" aria-label="Search your vault" />
               <button className="btn" type="submit">
                 Search
               </button>

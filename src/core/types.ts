@@ -164,6 +164,8 @@ export interface Settings {
   projectRoots: string[]
   vaultPath: string
   editor: string
+  /** Private ICS links (Google Calendar secret address, Canvas calendar feed). */
+  calendarFeeds?: { name: string; url: string }[]
 }
 
 export interface ProviderHealth {

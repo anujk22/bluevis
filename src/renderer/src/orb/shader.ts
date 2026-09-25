@@ -78,6 +78,7 @@ void main() {
   if (r < Rd + px) {
     vec2 p = uv / Rd;
     float z = sqrt(max(0.0, 1.0 - dot(p, p)));
+    vec3 n = normalize(vec3(p, z));
 
     // Ink: a slowly folding cloud, warped by two lower-frequency fields for depth.
     vec2 pp = p * (1.0 + 0.18 * (1.0 - z));
@@ -91,27 +92,33 @@ void main() {
     float rn = 1.0 - abs(fbm(vec3(wp * 2.4 + 1.3, ft * 0.38)) * 2.3);
     float tendril = pow(clamp(rn, 0.0, 1.0), 7.0) * smoothstep(0.15, 0.7, cloud) * uFil;
 
-    // A light source inside the ink, just below center.
-    float light = exp(-length(p - vec2(-0.1, -0.16)) * 2.1);
-    vec3 ink = mix(uCore, uMid, cloud * (0.3 + 0.7 * light));
-    ink += uMid * light * 0.28;
-    ink += uHi * tendril * (0.35 + 0.75 * light + uLevel * 0.9);
-    ink += uHi * exp(-pow(length(p - vec2(0.04, -0.58)), 2.0) * 9.0) * cloud * 0.18;
+    // Pearl glass: a luminous body with soft light currents moving inside it.
+    float light = exp(-length(p - vec2(-0.08, -0.12)) * 1.6);
+    vec3 ink = mix(uCore, uMid, 0.35 + 0.5 * cloud);
+    ink = mix(ink, uHi, smoothstep(0.45, 1.0, cloud) * 0.3 + light * 0.12);
+    ink += uHi * tendril * (0.18 + 0.5 * uLevel);
 
-    // Glass: limb darkening, fresnel rim, a faint inner reflection ring.
-    ink *= mix(0.3, 1.0, pow(z, 0.55));
-    float fres = pow(1.0 - z, 3.2);
-    ink += uRim * fres * (1.5 + uLevel * 0.8);
-    float ring = smoothstep(0.03, 0.0, abs(length(p) - 0.935));
-    ink += uHi * ring * 0.1 * (0.3 + 0.7 * smoothstep(-0.3, 0.9, p.y));
+    // Iridescence: a lavender cast toward the lower left, a cool cyan lift up top.
+    float irid = clamp(dot(n, normalize(vec3(-0.65, -0.6, 0.45))), 0.0, 1.0);
+    ink = mix(ink, vec3(0.74, 0.68, 0.98), irid * irid * 0.5);
+    float top = clamp(dot(n, normalize(vec3(0.25, 0.85, 0.45))), 0.0, 1.0);
+    ink = mix(ink, vec3(0.78, 0.94, 1.0), top * 0.18);
 
-    // A soft window reflection and one small glint.
-    vec2 hp = rot(p - vec2(-0.36, 0.47), 0.62);
-    ink += vec3(0.84, 0.91, 1.0) * exp(-(hp.x * hp.x * 16.0 + hp.y * hp.y * 70.0)) * 0.22;
-    ink += vec3(0.95, 0.98, 1.0) * exp(-length(p - vec2(-0.27, 0.56)) * 34.0) * 0.35;
+    // Glass: bright fresnel rim, softer center, a faint inner reflection ring.
+    float fres = pow(1.0 - z, 2.4);
+    ink *= 0.74 + 0.2 * z;
+    ink += uRim * fres * (1.05 + uLevel * 0.9);
+    float ring = smoothstep(0.035, 0.0, abs(length(p) - 0.93));
+    ink += uHi * ring * 0.12 * (0.4 + 0.6 * smoothstep(-0.3, 0.9, p.y));
 
-    // Energy from real audio lifts the whole volume from inside.
-    ink += uHi * light * uLevel * 0.3;
+    // Window reflection and glint.
+    vec2 hp = rot(p - vec2(-0.3, 0.42), 0.6);
+    ink += vec3(0.95, 0.98, 1.0) * exp(-(hp.x * hp.x * 9.0 + hp.y * hp.y * 38.0)) * 0.28;
+    ink += vec3(1.0) * exp(-length(p - vec2(-0.24, 0.5)) * 30.0) * 0.3;
+
+    // Real audio lifts the glow from inside.
+    ink += uHi * light * uLevel * 0.35;
+    ink = min(ink, vec3(1.15));
 
     alpha = 1.0 - smoothstep(Rd - 1.5 * px, Rd + px, r);
     col = ink;
@@ -122,7 +129,7 @@ void main() {
   float halo = (exp(-d * 5.5) * 0.55 + exp(-d * 18.0) * 0.45) * uHalo;
   // Fade to nothing before the canvas edge so the glow never shows a boundary.
   halo *= smoothstep(1.0, 0.7, r);
-  vec3 haloCol = mix(uRim, uMid, 0.35) * halo;
+  vec3 haloCol = mix(uRim, uHi, 0.4) * halo * 0.9;
 
   // Satellites: one per running agent, on a tilted orbit that passes behind the orb.
   vec3 moons = vec3(0.0);

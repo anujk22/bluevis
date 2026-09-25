@@ -51,3 +51,60 @@ export const Plus = () => (
     <path d="M12 5v14M5 12h14" />
   </svg>
 )
+
+export const Search = () => (
+  <svg {...base}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="m20 20-4.2-4.2" />
+  </svg>
+)
+
+export const Bell = () => (
+  <svg {...base}>
+    <path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16ZM10 20.5a2.2 2.2 0 0 0 4 0" />
+  </svg>
+)
+
+export const Chevron = () => (
+  <svg {...base}>
+    <path d="m7 10 5 5 5-5" />
+  </svg>
+)
+
+export const ArrowRight = () => (
+  <svg {...base}>
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+)
+
+export const Person = () => (
+  <svg {...base}>
+    <circle cx="12" cy="8.5" r="3.5" />
+    <path d="M5 20c1.2-3.5 3.8-5 7-5s5.8 1.5 7 5" />
+  </svg>
+)
+
+export const Clock = () => (
+  <svg {...base}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </svg>
+)
+
+export const Bars = () => (
+  <svg {...base}>
+    <path d="M6 20V13M12 20V5M18 20v-9" />
+  </svg>
+)
+
+export const Book = () => (
+  <svg {...base}>
+    <path d="M3.5 5.5c2.8-.9 5.6-.6 8.5 1v13c-2.9-1.6-5.7-1.9-8.5-1v-13ZM20.5 5.5c-2.8-.9-5.6-.6-8.5 1v13c2.9-1.6 5.7-1.9 8.5-1v-13Z" />
+  </svg>
+)
+
+export const Clip = () => (
+  <svg {...base}>
+    <path d="m19 11.5-6.8 6.8a4.5 4.5 0 0 1-6.4-6.4l7.4-7.4a3 3 0 0 1 4.2 4.2l-7.2 7.2a1.5 1.5 0 0 1-2.1-2.1l6.5-6.5" />
+  </svg>
+)

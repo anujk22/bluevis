@@ -167,6 +167,11 @@ describe('router', () => {
     expect(route('remember that I check email at 9', projects)).toMatchObject({ type: 'remember' })
   })
 
+  it('sends schedule questions to the agenda path', () => {
+    expect(route("what's on my calendar tomorrow?", projects)).toMatchObject({ type: 'agenda' })
+    expect(route('any assignments due this week', projects)).toMatchObject({ type: 'agenda' })
+  })
+
   it('opens only known projects, otherwise chats', () => {
     expect(route('open yonder', projects)).toEqual({ type: 'open', target: 'Yonder' })
     expect(route('open the pod bay doors', projects)).toMatchObject({ type: 'chat' })
