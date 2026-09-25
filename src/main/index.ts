@@ -13,6 +13,9 @@ import { VoiceService } from './voice'
 
 type Mode = 'compact' | 'expanded'
 
+// Isolated profile (settings + vault) for tests and experiments; never touches the real vault.
+if (process.env.BLUEVIS_PROFILE_DIR) app.setPath('userData', process.env.BLUEVIS_PROFILE_DIR)
+
 let win: BrowserWindow | null = null
 let mode: Mode = 'expanded'
 const send = (channel: string, ...args: unknown[]) => win?.webContents.send(channel, ...args)

@@ -164,7 +164,7 @@ export function App() {
     return (
       <div className="compact">
         <button className="stage-orb" onClick={() => api.window.setMode('expanded')} aria-label="Open Bluevis">
-          <Orb mode={orbMode} level={level} moons={Math.min(running.length, 4)} size={176} radius={0.5} />
+          <Orb mode={orbMode} level={level} moons={Math.min(running.length, 4)} size={176} radius={0.6} />
         </button>
         {orbMode !== 'idle' && <span className="compact-dot mono">{caption(orbMode, running.length)}</span>}
       </div>

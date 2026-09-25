@@ -109,6 +109,21 @@ function NewTask({ settings }: { settings: Settings | null }) {
   )
 }
 
+/** Output stays folded unless the step failed or is still running; the command line tells the story. */
+function Step({ step: s }: { step: AgentTask['steps'][number] }) {
+  const [open, setOpen] = useState(s.status !== 'done')
+  return (
+    <li data-s={s.status}>
+      <button className="label" style={{ textAlign: 'left', cursor: s.detail ? 'pointer' : 'default' }} onClick={() => setOpen(!open)} aria-expanded={s.detail ? open : undefined}>
+        <span className="kind">{s.kind === 'command' ? '$' : s.kind === 'edit' ? 'edit' : s.kind}</span>
+        {s.label}
+        {s.status === 'failed' && <span style={{ color: 'var(--fault)', marginLeft: 8 }}>✗ failed</span>}
+      </button>
+      {s.detail && open && <pre>{s.detail}</pre>}
+    </li>
+  )
+}
+
 function TaskDetail({ task }: { task: AgentTask }) {
   const api = window.bluevis
   const live = LIVE.has(task.status)
@@ -142,13 +157,7 @@ function TaskDetail({ task }: { task: AgentTask }) {
           ) : (
             <ul className="steps">
               {steps.map((s) => (
-                <li key={s.id} data-s={s.status}>
-                  <div className="label">
-                    <span className="kind">{s.kind === 'command' ? '$' : s.kind === 'edit' ? 'edit' : s.kind}</span>
-                    {s.label}
-                  </div>
-                  {s.detail && <pre>{s.detail}</pre>}
-                </li>
+                <Step key={s.id} step={s} />
               ))}
             </ul>
           )}

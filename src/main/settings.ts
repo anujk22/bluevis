@@ -7,6 +7,7 @@ import type { Settings } from '../core/types'
 const file = () => join(app.getPath('userData'), 'settings.json')
 
 function defaultVault(): string {
+  if (process.env.BLUEVIS_PROFILE_DIR) return join(app.getPath('userData'), 'vault')
   // In development the vault lives beside the app (gitignored); packaged builds use ~/Bluevis Vault.
   return app.isPackaged ? join(homedir(), 'Bluevis Vault') : join(app.getAppPath(), 'vault')
 }

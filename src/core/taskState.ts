@@ -1,7 +1,7 @@
 import type { AgentEvent, AgentTask, TaskStep } from './types'
 
 const VERIFY_PATTERN =
-  /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|check|build|lint|typecheck)\b|\b(vitest|jest|pytest|mocha|tsc|cargo\s+(test|build|check)|go\s+(test|build|vet)|swift\s+(test|build)|xcodebuild|make\s+(test|check)|ruff|mypy|eslint)\b/
+  /\b(npm|pnpm|yarn|bun)\s+(run\s+)?(test|check|build|lint|typecheck)\b|\bnode\s+--test\b|\b(vitest|jest|pytest|mocha|tsc|cargo\s+(test|build|check)|go\s+(test|build|vet)|swift\s+(test|build)|xcodebuild|make\s+(test|check)|ruff|mypy|eslint)\b/
 
 export function isVerificationCommand(command: string): boolean {
   return VERIFY_PATTERN.test(command)

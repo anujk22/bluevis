@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import type { AgentTask, Turn, VoiceHealth } from '../../../core/types'
 import type { Shot } from '../App'
 import { Arrow, Eye, Mic, Square } from '../components/icons'
-import { Markdown } from '../components/Markdown'
+import { Inline, Markdown } from '../components/Markdown'
 import { TaskStatus } from '../components/TaskStatus'
 
 interface Props {
@@ -35,6 +35,9 @@ export function Talk(p: Props) {
   const empty = p.turns.length === 0
   const scroller = useRef<HTMLDivElement>(null)
   const lastId = [...p.turns].reverse().find((t) => t.speaker === 'bluevis')?.id
+  // A task's live card shows only on the most recent turn that refers to it.
+  const cardTurn = new Map<string, string>()
+  for (const t of p.turns) if (t.taskId) cardTurn.set(t.taskId, t.id)
 
   useLayoutEffect(() => {
     const el = scroller.current
@@ -73,7 +76,7 @@ export function Talk(p: Props) {
       <section className="conversation" aria-label="Conversation">
         <div className="transcript" ref={scroller} role="log">
           {p.turns.map((t) => (
-            <TurnView key={t.id} turn={t} latest={t.id === lastId} task={t.taskId ? p.tasks[t.taskId] : undefined} tasks={p.tasks} onOpenTask={p.onOpenTask} />
+            <TurnView key={t.id} turn={t} latest={t.id === lastId} task={t.taskId && cardTurn.get(t.taskId) === t.id ? p.tasks[t.taskId] : undefined} tasks={p.tasks} onOpenTask={p.onOpenTask} />
           ))}
         </div>
         {!empty && composer}
@@ -242,7 +245,9 @@ function TurnView({ turn, latest, task, tasks, onOpenTask }: { turn: Turn; lates
         </div>
       ) : (
         <>
-          <p className="spoken">{spoken}</p>
+          <p className={`spoken ${spoken.length > 150 ? 'spoken-long' : ''}`}>
+            <Inline text={spoken} />
+          </p>
           {rest.length > 0 && <Markdown className="detail" text={rest.join('\n\n')} />}
         </>
       )}
@@ -257,7 +262,7 @@ function TurnView({ turn, latest, task, tasks, onOpenTask }: { turn: Turn; lates
           <TaskStatus status={task.status} />
           <span className="step mono">
             {task.steps.at(-1)?.label ?? 'waiting for first step'}
-            {task.filesChanged.length ? ` · ${task.filesChanged.length} files changed` : ''}
+            {task.filesChanged.length ? ` · ${task.filesChanged.length} file${task.filesChanged.length > 1 ? 's' : ''} changed` : ''}
           </span>
         </button>
       )}

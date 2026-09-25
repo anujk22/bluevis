@@ -489,6 +489,21 @@ button.chip:hover {
   letter-spacing: -0.012em;
 }
 
+.turn-latest .spoken-long {
+  font-size: 25px;
+  line-height: 1.24;
+}
+
+.spoken code {
+  font-family: var(--mono);
+  font-size: 0.56em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  vertical-align: 0.18em;
+  background: rgba(169, 200, 255, 0.1);
+  color: var(--glacier);
+}
+
 .turn-error .spoken {
   color: #ffc1c3;
 }
@@ -1142,6 +1157,15 @@ button.chip:hover {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.new-task .select {
+  flex: 1;
+  min-width: 0;
+}
+
+.agents .panel {
+  overflow-x: hidden;
 }
 
 .select {

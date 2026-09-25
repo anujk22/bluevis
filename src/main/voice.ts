@@ -67,15 +67,27 @@ export class VoiceService {
     this.starting = null
   }
 
+  /** Calls the sidecar; if it has gone away (crash, or a previous app instance killed it), restart it. */
+  private async call(path: string, init: RequestInit): Promise<Response> {
+    try {
+      return await fetch(`${BASE}${path}`, init)
+    } catch {
+      this.starting = null
+      this.set({ state: 'starting', detail: 'Voice restarted after the local service stopped' })
+      void this.start()
+      throw new Error('The local voice service stopped and is restarting. Try again in a few seconds.')
+    }
+  }
+
   async transcribe(wav: ArrayBuffer): Promise<string> {
-    const r = await fetch(`${BASE}/stt`, { method: 'POST', body: Buffer.from(wav), headers: { 'Content-Type': 'audio/wav' } })
+    const r = await this.call('/stt', { method: 'POST', body: Buffer.from(wav), headers: { 'Content-Type': 'audio/wav' } })
     const j = (await r.json()) as { text?: string; error?: string }
     if (!r.ok) throw new Error(j.error ?? 'Transcription failed')
     return j.text ?? ''
   }
 
   async speak(text: string, voice: string, speed: number): Promise<ArrayBuffer> {
-    const r = await fetch(`${BASE}/tts`, { method: 'POST', body: JSON.stringify({ text, voice, speed }), headers: { 'Content-Type': 'application/json' } })
+    const r = await this.call('/tts', { method: 'POST', body: JSON.stringify({ text, voice, speed }), headers: { 'Content-Type': 'application/json' } })
     if (!r.ok) throw new Error('Speech synthesis failed')
     return r.arrayBuffer()
   }

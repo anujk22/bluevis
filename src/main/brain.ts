@@ -212,11 +212,11 @@ export class Brain {
         : 'No active project.',
       `Known projects: ${projects.map((p) => p.name).join(', ') || 'none found'}`,
       running.length ? `Running agents: ${running.map((t) => `${label(t.choice)} on ${t.project ?? t.cwd}: ${t.status}`).join('; ')}` : 'No agents running.',
-      screenshot ? 'A screenshot of Anuj’s screen, captured just now at his request, is attached.' : ''
+      screenshot ? 'A screenshot of Anuj’s screen, captured just now at Anuj’s request, is attached.' : ''
     ]
       .filter(Boolean)
       .join('\n')
-    const prompt = `<situation>\n${env}\n</situation>\n\n<knowledge>\n${knowledge || '(nothing relevant in the vault)'}\n</knowledge>\n\nAnuj${screenshot ? ' (looking at his screen)' : ''}: ${text}`
+    const prompt = `<situation>\n${env}\n</situation>\n\n<knowledge>\n${knowledge || '(nothing relevant in the vault)'}\n</knowledge>\n\nAnuj${screenshot ? ' (looking at the screen)' : ''}: ${text}`
 
     const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: label(choice) })
     this.ev.busy(true)
@@ -281,7 +281,8 @@ export class Brain {
         ? { provider: 'claude', model: action.model ?? 'opus' }
         : { provider: 'codex', model: action.model ?? (s.worker.provider === 'codex' ? s.worker.model : 'gpt-6-sol'), effort: s.worker.effort ?? 'medium' }
     const brief = this.handoffBrief(project, action.prompt, choice)
-    const task = this.tasks.start({ title: action.prompt.slice(0, 90), prompt: brief, choice, cwd: project.path, project: project.name })
+    const title = action.prompt.charAt(0).toUpperCase() + action.prompt.slice(1, 90)
+    const task = this.tasks.start({ title, prompt: brief, choice, cwd: project.path, project: project.name })
     if (turnId) {
       const t = this.turns.find((x) => x.id === turnId)
       if (t?.action) {

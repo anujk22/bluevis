@@ -43,11 +43,14 @@ v0.1 core loop is built and runs: orb, text chat through Codex/Claude/local, loc
 - [x] Compact orb mode (⌥Space), talk hotkey (⌥⇧Space), look hotkey (⌥⇧L)
 
 ### Phase 3: verify end to end (in progress)
-- [ ] Live chat round trip with Codex Luna in the app, reply rendered and spoken
-- [ ] Delegation round trip: Codex agent edits a scratch repo, status + agent-run note written
+- [x] Live chat round trip with Codex Luna in the app (~5s), reply rendered and spoken via Kokoro
+- [x] Delegation round trip: Codex Sol fixed a failing test in a scratch repo; observed fail → edit → pass, marked verified
 - [ ] Voice round trip in the app (mic permission prompt needs the owner at the machine)
 - [ ] Screen capture (Screen Recording permission needs the owner)
 - [ ] Packaged `.dmg` smoke test
+
+- [x] Decision → `Decisions/` note, "I'm done" → `Sessions/` note, "where did I leave off" → grounded resume
+- [x] Voice sidecar recovers if it dies (restart + honest message)
 
 ### Phase 4: next up
 - [ ] Link vault project notes to repos by `path:` so "Yonder" resolves to its folder (discovered folder names are used today)
@@ -65,3 +68,5 @@ v0.1 core loop is built and runs: orb, text chat through Codex/Claude/local, loc
 - Codex brain turns cost ~50k (mostly cached) input tokens each because of Codex's own system prompt.
 - Project names are folder names (e.g. `Shopify` is probably Yonder's repo, unconfirmed).
 - Run `npm run check` before committing. UI changes: take a screenshot of the real app (Playwright `_electron` works).
+- **Testing against the real vault is forbidden.** Launch with `BLUEVIS_PROFILE_DIR=/some/tmp/dir` to get isolated settings and a fresh vault.
+- An unexplained mic activation was seen once during automated testing and did not reproduce; watch for it.

@@ -91,6 +91,11 @@ function blocks(src: string): ReactNode[] {
   return out
 }
 
+/** Inline Markdown only (code, bold, links), for single lines such as Bluevis's spoken sentence. */
+export function Inline({ text }: { text: string }) {
+  return <>{inline(text)}</>
+}
+
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = []
   const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[\[[^\]]+\]\])|(\[[^\]]+\]\([^)\s]+\))|(\*[^*\s][^*]*\*)|(https?:\/\/[^\s)]+)/g
@@ -107,7 +112,7 @@ function inline(text: string): ReactNode[] {
       const [, label, href] = t.match(/^\[([^\]]+)\]\(([^)]+)\)$/)!
       out.push(
         <a key={k++} href={href} target="_blank" rel="noreferrer">
-          {label}
+          {inline(label)}
         </a>
       )
     } else if (m[5]) out.push(<em key={k++}>{t.slice(1, -1)}</em>)
