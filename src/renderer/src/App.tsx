@@ -11,6 +11,7 @@ import { Memory } from './views/Memory'
 import { SettingsView } from './views/Settings'
 import { Relays } from './views/Relays'
 import type { RelayRun } from '../../core/relay'
+import { BASE_HUE, DEFAULT_ACCENT } from '../../core/color'
 
 export type View = 'talk' | 'agents' | 'relays' | 'memory' | 'settings'
 export interface Ctx {
@@ -44,6 +45,13 @@ export function App() {
   const [searchFocus, setSearchFocus] = useState(0)
   const [relays, setRelays] = useState<Record<string, RelayRun>>({})
   const [focusRelay, setFocusRelay] = useState<string | null>(null)
+
+  const accent = settings?.accent ?? DEFAULT_ACCENT
+  useEffect(() => {
+    // The stylesheet rotates its blues by --dh and scales their chroma by --c; both transition smoothly.
+    document.documentElement.style.setProperty('--dh', String((((accent.hue - BASE_HUE) % 360) + 540) % 360 - 180))
+    document.documentElement.style.setProperty('--c', String(accent.chroma))
+  }, [accent.hue, accent.chroma])
 
   const listener = useRef<Listener | null>(null)
   const speaker = useMemo(() => new Speaker((text) => api.voice.tts(text) as Promise<ArrayBuffer>), [api])
@@ -181,7 +189,7 @@ export function App() {
     return (
       <div className="compact">
         <button className="stage-orb" onClick={() => api.window.setMode('expanded')} aria-label="Open Bluevis">
-          <Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={176} radius={0.6} />
+          <Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={176} radius={0.6} accent={accent} />
         </button>
         {orbMode !== 'idle' && <span className="compact-dot mono">{caption(orbMode, workers)}</span>}
       </div>
@@ -243,7 +251,7 @@ export function App() {
             turns={turns}
             tasks={tasks}
             busy={busy}
-            orb={<Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={empty ? 460 : 440} radius={empty ? 0.43 : 0.52} className="stage-orb" />}
+            orb={<Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={empty ? 460 : 440} radius={empty ? 0.43 : 0.52} accent={accent} className="stage-orb" />}
             caption={caption(orbMode, workers, ctx.brainLabel)}
             live={orbMode !== 'idle'}
             listening={listening}

@@ -1,5 +1,7 @@
 // Shared types between the main process, preload bridge and renderer.
 
+import type { Accent } from './color'
+
 export type ProviderId = 'codex' | 'claude' | 'gemini' | 'local'
 
 export interface ModelChoice {
@@ -166,6 +168,8 @@ export interface Settings {
   editor: string
   /** Private ICS links (Google Calendar secret address, Canvas calendar feed). */
   calendarFeeds?: { name: string; url: string }[]
+  /** App accent color; everything tinted follows it, neutrals stay graphite. */
+  accent?: Accent
 }
 
 export interface ProviderHealth {

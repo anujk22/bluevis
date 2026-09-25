@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
+import { tint, type Accent, type RGB } from '../../../core/color'
 import type { OrbMode } from '../../../core/types'
 import { FRAG, VERT } from './shader'
 
-type RGB = [number, number, number]
 const hex = (h: string): RGB => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255]
 
 interface Look {
@@ -30,6 +30,16 @@ const LOOKS: Record<OrbMode, Look> = {
   error: { core: hex('#2c3350'), mid: hex('#6f7896'), hi: hex('#ffd9da'), rim: hex('#ff7a7e'), flow: 0.05, wobble: 0.004, levelWobble: 0, halo: 0.55, fil: 0.4 }
 }
 
+// Shader constants: iridescent sheen, top light, and satellite color.
+const SHEEN = { irid: [0.74, 0.68, 0.98] as RGB, top: [0.78, 0.94, 1.0] as RGB, moon: [0.78, 0.88, 1.0] as RGB }
+
+function recolor(accent: Accent) {
+  const looks = Object.fromEntries(
+    Object.entries(LOOKS).map(([m, l]) => [m, { ...l, core: tint(l.core, accent), mid: tint(l.mid, accent), hi: tint(l.hi, accent), rim: tint(l.rim, accent) }])
+  ) as Record<OrbMode, Look>
+  return { looks, irid: tint(SHEEN.irid, accent), top: tint(SHEEN.top, accent), moon: tint(SHEEN.moon, accent) }
+}
+
 interface Props {
   mode: OrbMode
   /** Returns the current real audio level, 0..1 (mic while listening, TTS while speaking). */
@@ -38,13 +48,18 @@ interface Props {
   size: number
   /** Orb radius as a fraction of half the canvas; the rest is room for the halo and satellites. */
   radius?: number
+  accent: Accent
   className?: string
 }
 
-export function Orb({ mode, level, moons, size, radius = 0.5, className }: Props) {
+export function Orb({ mode, level, moons, size, radius = 0.5, accent, className }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const target = useRef({ mode, moons, radius })
   target.current = { mode, moons, radius }
+  const palette = useRef(recolor(accent))
+  useEffect(() => {
+    palette.current = recolor(accent)
+  }, [accent.hue, accent.chroma])
   const levelRef = useRef(level)
   levelRef.current = level
 
@@ -73,11 +88,12 @@ export function Orb({ mode, level, moons, size, radius = 0.5, className }: Props
     const u = (n: string) => gl.getUniformLocation(prog, n)
     const U = {
       res: u('uRes'), time: u('uTime'), flowTime: u('uFlowTime'), level: u('uLevel'), wobble: u('uWobble'), halo: u('uHalo'), breath: u('uBreath'),
-      fil: u('uFil'), core: u('uCore'), mid: u('uMid'), hi: u('uHi'), rim: u('uRim'), moons: u('uMoons'), radius: u('uRadius')
+      fil: u('uFil'), core: u('uCore'), mid: u('uMid'), hi: u('uHi'), rim: u('uRim'), moons: u('uMoons'), radius: u('uRadius'), irid: u('uIrid'), top: u('uTop'), moon: u('uMoon')
     }
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const cur: Look = structuredClone(LOOKS[target.current.mode])
+    const cur: Look = structuredClone(palette.current.looks[target.current.mode])
+    const sheen = { irid: [...palette.current.irid] as RGB, top: [...palette.current.top] as RGB, moon: [...palette.current.moon] as RGB }
     let lvl = 0
     let flowTime = 0
     let curRadius = target.current.radius
@@ -108,12 +124,15 @@ export function Orb({ mode, level, moons, size, radius = 0.5, className }: Props
         lastMode = m
       }
       errorFlash = Math.max(0, errorFlash - dt * 1.4)
-      const goal = LOOKS[m]
+      const goal = palette.current.looks[m]
       const k = 1 - Math.exp(-dt * 4)
       mixRGB(cur.core, goal.core, k)
       mixRGB(cur.mid, goal.mid, k)
       mixRGB(cur.hi, goal.hi, k)
       mixRGB(cur.rim, goal.rim, k)
+      mixRGB(sheen.irid, palette.current.irid, k)
+      mixRGB(sheen.top, palette.current.top, k)
+      mixRGB(sheen.moon, palette.current.moon, k)
       cur.flow = mixTo(cur.flow, goal.flow, k)
       cur.wobble = mixTo(cur.wobble, goal.wobble, k)
       cur.levelWobble = mixTo(cur.levelWobble, goal.levelWobble, k)
@@ -148,6 +167,9 @@ export function Orb({ mode, level, moons, size, radius = 0.5, className }: Props
       gl.uniform3fv(U.mid, cur.mid)
       gl.uniform3fv(U.hi, cur.hi)
       gl.uniform3fv(U.rim, cur.rim)
+      gl.uniform3fv(U.irid, sheen.irid)
+      gl.uniform3fv(U.top, sheen.top)
+      gl.uniform3fv(U.moon, sheen.moon)
       gl.uniform1i(U.moons, mn)
       gl.uniform1f(U.radius, curRadius)
       gl.clearColor(0, 0, 0, 0)

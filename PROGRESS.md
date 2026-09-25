@@ -71,6 +71,12 @@ Nothing loads the whole vault. Per turn Bluevis sends: `Profile/Core.md` (~1.3k 
 - [x] Installable app: `npx electron-builder --mac dir` then copy `dist/mac-arm64/Bluevis.app` to /Applications
 - [ ] GPT image generation as an MCP tool for Claude (Codex image_generation works from exec, ~60s/image)
 - [~] Gemini provider via the AI Studio API (key stored with safeStorage, checked on save, then Gemini Flash becomes the conversation model; streams, keeps history, sends screenshots). Unverified until a key is added. The Gemini CLI is not used: Google rejects personal-account login with IneligibleTierError. No Gemini usage meter: no API reports remaining quota
+- [x] Accent color in Settings: presets plus any hue; stylesheet blues are OKLCH-rotated by `--dh`/`--c` (`src/core/color.ts` does the same for the orb). Neutrals and amber never shift
+- [x] More expressive Kokoro voices in the picker (Bella, Isabella, Nova, Puck, Fenrir)
+- [ ] Workbench: in-app terminals (xterm.js + node-pty) Bluevis can read, agents in panes
+- [ ] Hackathon mode: plan to scaffold, parallel agents, deadline clock, judging tracker, submission kit, pitch rehearsal, red locked-in accent and its own orb animation
+- [ ] Overnight agent queue that spends expiring Codex allowance
+- [ ] Spoken daily brief (Canvas, recruiting deadlines, calendar, overnight results)
 - [x] Streaming speech: sentences are spoken as the reply streams (Gemini, Claude, local); Codex still speaks after completion
 - [x] Memory gate: general questions get a one-line identity only; the vault is consulted for personal, schedule, work and project questions, with strict meaning-gated retrieval (thresholds measured on the real vault)
 - [x] Graphite glass theme, centered nav, Codex remaining meter in the header

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { DEFAULT_ACCENT, type Accent } from '../../../core/color'
 import type { ModelChoice, ProviderHealth, Settings, VoiceHealth } from '../../../core/types'
 import { UsageDetail, type UsageState } from '../components/Usage'
 
@@ -37,8 +38,13 @@ const VOICES: { engine: string; blurb: string; voices: VoiceOption[] }[] = [
       { id: 'bm_fable', name: 'Fable', kind: 'British male' },
       { id: 'bm_lewis', name: 'Lewis', kind: 'British male' },
       { id: 'bf_emma', name: 'Emma', kind: 'British female' },
-      { id: 'af_heart', name: 'Heart', kind: 'American female' },
-      { id: 'am_michael', name: 'Michael', kind: 'American male' }
+      { id: 'bf_isabella', name: 'Isabella', kind: 'British female, bright' },
+      { id: 'af_heart', name: 'Heart', kind: 'American female, warm' },
+      { id: 'af_bella', name: 'Bella', kind: 'American female, lively' },
+      { id: 'af_nova', name: 'Nova', kind: 'American female' },
+      { id: 'am_michael', name: 'Michael', kind: 'American male' },
+      { id: 'am_puck', name: 'Puck', kind: 'American male, upbeat' },
+      { id: 'am_fenrir', name: 'Fenrir', kind: 'American male, energetic' }
     ]
   }
 ]
@@ -180,6 +186,54 @@ function ModelPicker({ value, onChange, localModels, allowLocal = true }: { valu
   )
 }
 
+// Warm hues read duller than blue at equal chroma, so they get a boost.
+const ACCENTS: { name: string; hue: number; chroma: number }[] = [
+  { name: 'Blue', hue: 262, chroma: 1 },
+  { name: 'Violet', hue: 300, chroma: 1.1 },
+  { name: 'Pink', hue: 350, chroma: 1.3 },
+  { name: 'Red', hue: 25, chroma: 1.6 },
+  { name: 'Orange', hue: 55, chroma: 1.4 },
+  { name: 'Gold', hue: 90, chroma: 1.2 },
+  { name: 'Green', hue: 150, chroma: 1.2 },
+  { name: 'Teal', hue: 190, chroma: 1.1 },
+  { name: 'Cyan', hue: 225, chroma: 1 },
+  { name: 'Graphite', hue: 262, chroma: 0 }
+]
+
+function AccentPicker({ value, onChange }: { value: Accent; onChange: (a: Accent) => void }) {
+  return (
+    <div className="accents">
+      <div className="swatches" role="radiogroup" aria-label="Accent color">
+        {ACCENTS.map((a) => {
+          const chroma = a.chroma
+          const on = value.chroma === chroma && (chroma === 0 || value.hue === a.hue)
+          return (
+            <button
+              key={a.name}
+              role="radio"
+              aria-checked={on}
+              aria-label={a.name}
+              title={a.name}
+              className="swatch"
+              style={{ background: `oklch(0.74 ${0.12 * chroma} ${a.hue})` }}
+              onClick={() => onChange({ hue: a.hue, chroma })}
+            />
+          )
+        })}
+      </div>
+      <input
+        className="hue"
+        type="range"
+        min={0}
+        max={359}
+        value={value.hue}
+        aria-label="Any hue"
+        onChange={(e) => onChange({ hue: Number(e.target.value), chroma: 1.2 })}
+      />
+    </div>
+  )
+}
+
 /** Gemini runs through an AI Studio API key, stored encrypted in the keychain; the key never comes back to the page. */
 function GeminiKey({ saved, onSaved }: { saved: boolean; onSaved: () => void }) {
   const [key, setKey] = useState('')
@@ -235,6 +289,12 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
           <p className="panel-sub" style={{ margin: 0 }}>
             Changes save immediately.
           </p>
+        </div>
+
+        <div className="section">
+          <h3>Color</h3>
+          <p>One accent for the orb, glows and highlights. The graphite stays.</p>
+          <AccentPicker value={settings.accent ?? DEFAULT_ACCENT} onChange={(accent) => save({ accent })} />
         </div>
 
         <div className="section">

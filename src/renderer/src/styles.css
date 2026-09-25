@@ -1,3 +1,15 @@
+@property --dh {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --c {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
 :root {
   --abyss: #0a0b0d;
   --ink: #141519;
@@ -5,14 +17,21 @@
   --surface-2: rgba(255, 255, 255, 0.09);
   --line: rgba(255, 255, 255, 0.1);
   --line-2: rgba(255, 255, 255, 0.18);
-  --bone: #eef3fb;
-  --bone-2: rgba(238, 243, 251, 0.78);
-  --mist: rgba(238, 243, 251, 0.56);
-  --faint: rgba(238, 243, 251, 0.34);
-  --klein: #2447ff;
-  --sky: #a7c7ff;
-  --azure: #b3cdff;
-  --glacier: #d3e3ff;
+  /* Accent: every tinted color is rotated by --dh degrees of OKLCH hue from the original blue and
+     its chroma scaled by --c (0 = graphite). Neutrals and amber never shift. */
+  --bone: oklch(from #eef3fb l calc(c * var(--c)) calc(h + var(--dh)));
+  --bone-2: rgb(from var(--bone) r g b / 0.78);
+  --mist: rgb(from var(--bone) r g b / 0.56);
+  --faint: rgb(from var(--bone) r g b / 0.34);
+  --klein: oklch(from #2447ff l calc(c * var(--c)) calc(h + var(--dh)));
+  --sky: oklch(from #a7c7ff l calc(c * var(--c)) calc(h + var(--dh)));
+  --azure: oklch(from #b3cdff l calc(c * var(--c)) calc(h + var(--dh)));
+  --glacier: oklch(from #d3e3ff l calc(c * var(--c)) calc(h + var(--dh)));
+  --periwinkle: oklch(from #8fa6ff l calc(c * var(--c)) calc(h + var(--dh)));
+  --beam: oklch(from #8cb4ff l calc(c * var(--c)) calc(h + var(--dh)));
+  --glow: oklch(from #78a0ff l calc(c * var(--c)) calc(h + var(--dh)));
+  --dusk: oklch(from #7aa4f0 l calc(c * var(--c)) calc(h + var(--dh)));
+  --deep: oklch(from #0b1730 l calc(c * var(--c)) calc(h + var(--dh)));
   --amber: #ffb547;
   --fault: #ff7a7e;
   --verdant: #8be3c0;
@@ -25,6 +44,9 @@
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   color-scheme: dark;
+  transition:
+    --dh 1.2s var(--ease),
+    --c 1.2s var(--ease);
 }
 
 * {
@@ -71,7 +93,7 @@ button {
 }
 
 ::selection {
-  background: rgba(36, 71, 255, 0.45);
+  background: rgb(from var(--klein) r g b / 0.45);
 }
 
 ::-webkit-scrollbar {
@@ -110,7 +132,7 @@ button {
   flex-direction: column;
   isolation: isolate;
   background:
-    radial-gradient(620px 480px at var(--glow-x, 26%) 40%, rgba(120, 160, 255, 0.11), transparent 70%),
+    radial-gradient(620px 480px at var(--glow-x, 26%) 40%, rgb(from var(--glow) r g b / 0.11), transparent 70%),
     linear-gradient(180deg, #1a1b1f 0%, #121316 45%, var(--abyss) 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -1810,7 +1832,7 @@ kbd {
 
 .relay-dots i[data-s='running'] {
   background: var(--klein);
-  box-shadow: 0 0 8px rgba(36, 71, 255, 0.9);
+  box-shadow: 0 0 8px rgb(from var(--klein) r g b / 0.9);
   animation: pulse 1.2s infinite;
 }
 
@@ -1886,8 +1908,8 @@ kbd {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #8fa6ff;
-  box-shadow: 0 0 10px 2px rgba(36, 71, 255, 0.9);
+  background: var(--periwinkle);
+  box-shadow: 0 0 10px 2px rgb(from var(--klein) r g b / 0.9);
   animation: bead 1.4s var(--ease) infinite;
 }
 
@@ -1918,8 +1940,8 @@ kbd {
 }
 
 .column[data-s='running'] {
-  border-color: rgba(143, 166, 255, 0.35);
-  background: linear-gradient(180deg, rgba(36, 71, 255, 0.07), var(--surface) 40%);
+  border-color: rgb(from var(--periwinkle) r g b / 0.35);
+  background: linear-gradient(180deg, rgb(from var(--klein) r g b / 0.07), var(--surface) 40%);
 }
 
 .column[data-s='waiting'] {
@@ -2061,8 +2083,8 @@ kbd {
 }
 
 .voice-card[aria-current='true'] {
-  border-color: rgba(143, 166, 255, 0.55);
-  background: linear-gradient(180deg, rgba(36, 71, 255, 0.1), var(--surface));
+  border-color: rgb(from var(--periwinkle) r g b / 0.55);
+  background: linear-gradient(180deg, rgb(from var(--klein) r g b / 0.1), var(--surface));
 }
 
 .voice-pick {
@@ -2227,7 +2249,7 @@ kbd {
 
 .corner .dot[data-ok='true'] {
   background: var(--sky);
-  box-shadow: 0 0 10px rgba(140, 180, 255, 0.9);
+  box-shadow: 0 0 10px rgb(from var(--beam) r g b / 0.9);
 }
 
 .corner-sub {
@@ -2309,8 +2331,8 @@ kbd {
   right: 12%;
   bottom: -1px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(170, 205, 255, 0.9), transparent);
-  box-shadow: 0 0 18px 2px rgba(140, 180, 255, 0.45);
+  background: linear-gradient(90deg, transparent, rgb(from var(--azure) r g b / 0.9), transparent);
+  box-shadow: 0 0 18px 2px rgb(from var(--beam) r g b / 0.45);
   pointer-events: none;
   opacity: 0.8;
 }
@@ -2370,9 +2392,9 @@ kbd {
 }
 
 .round[aria-pressed='true'] {
-  color: #0b1730;
+  color: var(--deep);
   background: var(--sky);
-  box-shadow: 0 0 22px -2px rgba(140, 180, 255, 0.9);
+  box-shadow: 0 0 22px -2px rgb(from var(--beam) r g b / 0.9);
 }
 
 .round svg {
@@ -2386,10 +2408,10 @@ kbd {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  color: #0b1730;
-  background: radial-gradient(circle at 35% 30%, #d6e6ff, var(--sky) 60%, #7aa4f0);
+  color: var(--deep);
+  background: radial-gradient(circle at 35% 30%, var(--glacier), var(--sky) 60%, var(--dusk));
   box-shadow:
-    0 0 24px -2px rgba(140, 180, 255, 0.75),
+    0 0 24px -2px rgb(from var(--beam) r g b / 0.75),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
   transition:
     transform 0.15s,
@@ -2488,7 +2510,7 @@ kbd {
 
 .menu-item[aria-checked='true'] {
   color: var(--bone);
-  background: rgba(167, 199, 255, 0.14);
+  background: rgb(from var(--sky) r g b / 0.14);
 }
 
 .menu-note {
@@ -2581,4 +2603,53 @@ kbd {
 .icon-btn svg {
   width: 19px;
   height: 19px;
+}
+
+/* ————— Accent picker ————— */
+
+.accents {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  transition: transform 0.2s var(--ease), box-shadow 0.2s;
+}
+
+.swatch:hover {
+  transform: scale(1.08);
+}
+
+.swatch[aria-checked='true'] {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 2px var(--abyss), 0 0 0 3.5px var(--bone);
+}
+
+.hue {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  max-width: 320px;
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(90deg in oklch longer hue, oklch(0.74 0.14 0), oklch(0.74 0.14 359));
+}
+
+.hue::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bone);
+  box-shadow: 0 0 0 3px var(--abyss), 0 2px 8px rgba(0, 0, 0, 0.5);
 }

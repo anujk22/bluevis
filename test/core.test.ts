@@ -7,6 +7,7 @@ import { matchProject, route } from '../src/core/router'
 import { parseReply, speakable, splitSentences } from '../src/core/reply'
 import { parseNote, rank, serializeNote, slugify } from '../src/core/notes'
 import type { AgentEvent } from '../src/core/types'
+import { DEFAULT_ACCENT, tint } from '../src/core/color'
 
 const fixture = (name: string) => readFileSync(join(__dirname, 'fixtures', name), 'utf8').split('\n')
 
@@ -273,5 +274,23 @@ describe('memory gate', () => {
     for (const q of ['what did I decide about pricing', 'any assignments due', 'help me write to my manager', 'how are we doing on it'])
       expect(needsMemory(q)).toBe(true)
     expect(needsMemory('ideas for Yonder monetization', ['Yonder'])).toBe(true)
+  })
+})
+
+describe('accent tint', () => {
+  const blue: [number, number, number] = [0x38 / 255, 0x62 / 255, 0xb8 / 255]
+  it('leaves blue unchanged at the default accent', () => {
+    tint(blue, DEFAULT_ACCENT).forEach((v, i) => expect(v).toBeCloseTo(blue[i], 3))
+  })
+  it('turns blue red and keeps amber amber', () => {
+    const [r, g, b] = tint(blue, { hue: 25, chroma: 1 })
+    expect(r).toBeGreaterThan(g)
+    expect(r).toBeGreaterThan(b)
+    expect(tint([1, 0.71, 0.28], { hue: 25, chroma: 1 })).toEqual([1, 0.71, 0.28])
+  })
+  it('goes grey at zero chroma', () => {
+    const [r, g, b] = tint(blue, { hue: 25, chroma: 0 })
+    expect(Math.abs(r - b)).toBeLessThan(0.01)
+    expect(Math.abs(r - g)).toBeLessThan(0.01)
   })
 })
