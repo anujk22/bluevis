@@ -13,7 +13,7 @@ import { QueueManager } from './queue'
 import { onRateLimits, providerHealth } from './providers'
 import { UsageService } from './usage'
 import { getSecret, setSecret } from './secrets'
-import { DEFAULT_CANVAS, verifyCanvas } from './canvas'
+import { DEFAULT_CANVAS, signInCanvas, signOutCanvas, verifyCanvas } from './canvas'
 import { getSettings, updateSettings } from './settings'
 import { adoptLoginShellPath, run } from './shell'
 import { TaskManager } from './tasks'
@@ -284,6 +284,19 @@ app.whenReady().then(async () => {
     } catch (e) {
       return { ok: false, error: (e as Error).message }
     }
+  })
+  ipcMain.handle('canvas:sign-in', async () => {
+    try {
+      const name = await signInCanvas(getSettings().canvasUrl ?? DEFAULT_CANVAS)
+      send('settings', updateSettings({ canvasSignedIn: true }))
+      return { ok: true, name }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+  ipcMain.handle('canvas:sign-out', async () => {
+    await signOutCanvas()
+    send('settings', updateSettings({ canvasSignedIn: false }))
   })
   ipcMain.handle('secrets:has', (_e, name: 'gemini' | 'canvas') => !!getSecret(name))
   // Check the key against the model before keeping it; a working key makes Gemini Flash the conversation model.

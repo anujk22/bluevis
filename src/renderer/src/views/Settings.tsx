@@ -275,6 +275,8 @@ function Canvas({ settings, save }: { settings: Settings; save: (p: Partial<Sett
   const api = window.bluevis
   const [saved, setSaved] = useState(false)
   const [who, setWho] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     void api.secrets.has('canvas').then((h) => setSaved(h as boolean))
   }, [api])
@@ -291,17 +293,50 @@ function Canvas({ settings, save }: { settings: Settings; save: (p: Partial<Sett
           />
         </div>
       </div>
-      <SecretField
-        label="Access token"
-        saved={saved}
-        placeholder="Canvas: Account, Settings, New Access Token"
-        save={async (v) => (await api.canvas.setToken(v)) as SaveResult}
-        onSaved={(r) => {
-          setSaved(true)
-          setWho(r.name ?? null)
-        }}
-      />
-      {who && <p style={{ color: 'var(--mist)', fontSize: 12.5, margin: '4px 0 0' }}>Connected as {who}.</p>}
+      <div className="field">
+        <label>Account</label>
+        <div className="ctrl" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {settings.canvasSignedIn ? (
+            <>
+              <span style={{ color: 'var(--mist)', fontSize: 13 }}>Signed in{who ? ` as ${who}` : ''}</span>
+              <button className="btn btn-quiet" onClick={() => api.canvas.signOut()}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                setError(null)
+                const r = (await api.canvas.signIn()) as SaveResult
+                setBusy(false)
+                if (r.ok) setWho(r.name ?? null)
+                else setError(r.error ?? 'Sign-in failed')
+              }}
+            >
+              {busy ? 'Finish signing in in the Canvas window…' : 'Sign in to Canvas'}
+            </button>
+          )}
+        </div>
+      </div>
+      {error && <p style={{ color: 'var(--amber)', fontSize: 12.5, margin: '4px 0 0' }}>{error}</p>}
+      <details style={{ marginTop: 8 }}>
+        <summary className="eyebrow" style={{ cursor: 'pointer' }}>
+          Use an access token instead
+        </summary>
+        <SecretField
+          label="Access token"
+          saved={saved}
+          placeholder="Canvas: Account, Settings, New Access Token"
+          save={async (v) => (await api.canvas.setToken(v)) as SaveResult}
+          onSaved={(r) => {
+            setSaved(true)
+            setWho(r.name ?? null)
+          }}
+        />
+      </details>
     </div>
   )
 }
@@ -443,7 +478,7 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
 
         <div className="section">
           <h3>Canvas</h3>
-          <p>Assignments with whether you submitted them, grades and announcements. Read-only; the token stays in your keychain.</p>
+          <p>Assignments with whether you submitted them, grades and announcements. Read-only. You sign in yourself in a Canvas window; Bluevis keeps that session separate from everything else.</p>
           <Canvas settings={settings} save={save} />
         </div>
 

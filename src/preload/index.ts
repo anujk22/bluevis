@@ -15,7 +15,7 @@ const api = {
   },
   actions: { approve: invoke('action:approve'), dismiss: invoke('action:dismiss') },
   tasks: { list: invoke('tasks:list'), start: invoke('tasks:start'), stop: invoke('tasks:stop') },
-  canvas: { setToken: invoke('canvas:set-token') },
+  canvas: { setToken: invoke('canvas:set-token'), signIn: invoke('canvas:sign-in'), signOut: invoke('canvas:sign-out') },
   secrets: { has: invoke('secrets:has') },
   terminals: {
     create: invoke('term:create'),

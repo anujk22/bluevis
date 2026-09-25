@@ -172,6 +172,8 @@ export interface Settings {
   accent?: Accent
   /** Canvas base URL; the access token lives in the keychain. */
   canvasUrl?: string
+  /** Signed in to Canvas in Bluevis (for schools that block personal tokens). */
+  canvasSignedIn?: boolean
   /** Speak the daily brief the first time Bluevis opens each morning. */
   morningBrief?: boolean
 }
