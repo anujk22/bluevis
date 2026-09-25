@@ -213,7 +213,7 @@ export function App() {
             turns={turns}
             tasks={tasks}
             busy={busy}
-            orb={<Orb mode={orbMode} level={level} moons={Math.min(running.length, 4)} size={empty ? 460 : 440} radius={0.5} className="stage-orb" />}
+            orb={<Orb mode={orbMode} level={level} moons={Math.min(running.length, 4)} size={empty ? 460 : 440} radius={empty ? 0.5 : 0.56} className="stage-orb" />}
             caption={caption(orbMode, running.length, ctx.brainLabel)}
             live={orbMode !== 'idle'}
             listening={listening}

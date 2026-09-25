@@ -120,6 +120,8 @@ void main() {
   // Halo: light the ink throws onto the dark around it.
   float d = max(r - Rd, 0.0);
   float halo = (exp(-d * 5.5) * 0.55 + exp(-d * 18.0) * 0.45) * uHalo;
+  // Fade to nothing before the canvas edge so the glow never shows a boundary.
+  halo *= smoothstep(1.0, 0.7, r);
   vec3 haloCol = mix(uRim, uMid, 0.35) * halo;
 
   // Satellites: one per running agent, on a tilted orbit that passes behind the orb.

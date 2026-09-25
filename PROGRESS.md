@@ -2,7 +2,7 @@
 
 Single source of truth for build status. **Any agent picking this up: read this file first, then `AGENTS.md`.** Update it in the same commit as the work it describes.
 
-Last updated: 2026-09-25 by Claude Opus (Claude Code session)
+Last updated: 2026-09-25 01:30 ET by Claude Opus (Claude Code session)
 
 ## Current state
 
@@ -45,7 +45,7 @@ v0.1 core loop is built and runs: orb, text chat through Codex/Claude/local, loc
 ### Phase 3: verify end to end (in progress)
 - [x] Live chat round trip with Codex Luna in the app (~5s), reply rendered and spoken via Kokoro
 - [x] Delegation round trip: Codex Sol fixed a failing test in a scratch repo; observed fail → edit → pass, marked verified
-- [ ] Voice round trip in the app (mic permission prompt needs the owner at the machine)
+- [ ] Voice input round trip in the app (TTS output verified; mic permission prompt needs the owner at the machine)
 - [ ] Screen capture (Screen Recording permission needs the owner)
 - [ ] Packaged `.dmg` smoke test
 
