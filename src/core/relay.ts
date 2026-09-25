@@ -17,7 +17,7 @@ export interface StageRun {
   /** Streamed or final text produced by the stage. */
   text: string
   /** Observable side events: tool calls, reasoning summaries, fetches. */
-  events: { at: number; label: string }[]
+  events: { at: number; label: string; progress?: boolean }[]
   startedAt?: number
   endedAt?: number
   error?: string
@@ -56,6 +56,7 @@ export function htmlToText(html: string, max = 24000): string {
   t = t
     .split('\n')
     .map((l) => l.replace(/[ \t]+/g, ' ').trim())
+    .filter((l) => !/unsupported browser|Internet Explorer 10|^#+$/i.test(l))
     .filter((l, i, a) => l || (a[i - 1] ?? '') !== '')
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -70,7 +71,10 @@ export function devpostRoot(url: string): string | null {
 }
 
 export function relayTitle(pageText: string, url: string): string {
-  const first = pageText.split('\n').find((l) => l.startsWith('#'))?.replace(/^#+\s*/, '')
+  const first = pageText
+    .split('\n')
+    .find((l) => /^#+\s+\S/.test(l))
+    ?.replace(/^#+\s*/, '')
   return (first && first.length < 80 ? first : null) ?? devpostRoot(url)?.replace('https://', '').replace('.devpost.com', '') ?? 'Hackathon'
 }
 

@@ -19,6 +19,10 @@ export interface RunOptions {
   /** Prior turns, used only by the stateless local provider. */
   history?: { role: 'user' | 'assistant'; content: string }[]
   localBaseUrl?: string
+  /** Claude only: exact tool allowlist for this run (replaces the brain's default read-only set). */
+  tools?: string[]
+  /** Claude only: tools to refuse outright, as a second line of defense. */
+  denyTools?: string[]
   /** JSON Schema for the final reply. Codex enforces it; other providers are asked for JSON. */
   schema?: object
   onEvent: (e: AgentEvent) => void
@@ -27,6 +31,12 @@ export interface RunOptions {
 export interface RunHandle {
   stop: () => void
   done: Promise<void>
+}
+
+let limitsHook: ((raw: unknown) => void) | null = null
+/** Every run reports provider rate-limit events here, whoever started it. */
+export function onRateLimits(fn: (raw: unknown) => void) {
+  limitsHook = fn
 }
 
 export function runProvider(o: RunOptions): RunHandle {
@@ -47,6 +57,10 @@ function cliRun(cmd: string, args: string[], o: RunOptions, parse: (l: string) =
       stdin,
       onLine: (line) => {
         for (const ev of parse(line)) {
+          if (ev.kind === 'limits') {
+            limitsHook?.(ev.raw)
+            continue
+          }
           if (ev.kind === 'done' || ev.kind === 'error') finished = true
           o.onEvent(ev)
         }
@@ -108,7 +122,8 @@ function runClaude(o: RunOptions): RunHandle {
   if (o.sessionId) args.push('--resume', o.sessionId)
   if (o.system) args.push('--append-system-prompt', o.system)
   if (o.role === 'brain') {
-    args.push('--permission-mode', 'default', '--allowedTools', 'Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch')
+    args.push('--permission-mode', 'default', '--allowedTools', ...(o.tools ?? ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch']))
+    if (o.denyTools?.length) args.push('--disallowedTools', ...o.denyTools)
   } else {
     // Edits are accepted inside the workspace; shell commands run in Claude Code's sandbox.
     args.push('--permission-mode', 'acceptEdits', '--settings', JSON.stringify({ sandbox: { enabled: true, autoAllowBashIfSandboxed: true } }))

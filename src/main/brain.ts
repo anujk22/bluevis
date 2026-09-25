@@ -25,6 +25,15 @@ export interface BrainEvents {
   settings: (s: Settings) => void
 }
 
+const GMAIL = (t: string[]) => t.map((x) => `mcp__claude_ai_Gmail__${x}`)
+const GMAIL_READ = GMAIL(['search_threads', 'get_thread', 'get_message', 'list_labels', 'list_drafts', 'get_draft'])
+// Everything that changes the mailbox is refused outright, even if a prompt asks for it.
+const GMAIL_WRITE = GMAIL([
+  'send_message', 'reply', 'forward', 'create_draft', 'update_draft', 'delete_draft', 'trash_message', 'trash_thread', 'untrash_message', 'untrash_thread',
+  'label_message', 'label_thread', 'unlabel_message', 'unlabel_thread', 'update_message_labels', 'create_label', 'update_label', 'delete_label',
+  'mark_message_spam', 'mark_thread_spam', 'unmark_message_spam', 'unmark_thread_spam', 'apply_sensitive_message_label', 'apply_sensitive_thread_label'
+])
+
 const BRAIN_DEFAULTS: Record<ModelChoice['provider'], ModelChoice> = {
   codex: { provider: 'codex', model: 'gpt-6-luna', effort: 'low' },
   claude: { provider: 'claude', model: 'haiku' },
@@ -144,6 +153,8 @@ export class Brain {
       case 'new-conversation':
         this.reset()
         return
+      case 'mail':
+        return this.mail(intent.text)
       case 'relay': {
         const run = this.relays.start(intent.url, intent.note)
         return this.say('Relay started. Opus ideates, Astra challenges, then Opus consolidates. You can watch every step.', { relayId: run.id })
@@ -251,6 +262,63 @@ export class Brain {
     } finally {
       this.ev.busy(false)
     }
+  }
+
+  /** Email questions run through Claude with Anuj's Gmail connector, read-only, with every search shown. */
+  private async mail(text: string) {
+    const { text: knowledge, used } = await this.vault.context(`${text} applications assessments recruiting`, { allowPrivate: false, limit: 4, maxChars: 4000 })
+    const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: 'Claude Sonnet · Gmail (read-only)', sources: used, activity: [] })
+    this.ev.busy(true)
+    const now = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'full', timeStyle: 'short' })
+    const prompt = `Now: ${now} (America/New_York).
+
+Answer Anuj's question using the Gmail tools (read-only). Search precisely with Gmail query syntax (from:, subject:, newer_than:, after:). Prefer a few targeted searches over many broad ones.
+
+For every email you rely on, give sender, date and subject. Distinguish application acknowledgments, assessment invitations (with the real deadline, in America/New_York), interview requests, rejections and marketing. An invitation is not a completed assessment. If nothing matches, say exactly what you searched and that it found nothing; never imply you checked more than you did.
+
+<vault_context>
+${knowledge}
+</vault_context>
+
+Anuj: ${text}`
+    let raw = ''
+    let failed: string | null = null
+    const handle = runProvider({
+      choice: { provider: 'claude', model: 'sonnet', effort: 'low' },
+      prompt,
+      cwd: this.workspace,
+      role: 'brain',
+      system: PERSONA,
+      tools: GMAIL_READ,
+      denyTools: GMAIL_WRITE,
+      onEvent: (e) => {
+        if (e.kind === 'tool' && e.name.startsWith('mcp__claude_ai_Gmail__')) {
+          turn.activity!.push(`Gmail ${e.name.replace('mcp__claude_ai_Gmail__', '').replace(/_/g, ' ')}${e.detail ? ` · ${e.detail}` : ''}`)
+          this.update(turn)
+        }
+        if (e.kind === 'text-delta') {
+          raw += e.text
+          turn.text = parseReply(raw).shown
+          this.update(turn)
+        }
+        if (e.kind === 'message') raw = e.text
+        if (e.kind === 'error') failed = e.message
+      }
+    })
+    this.current = handle
+    await handle.done
+    this.ev.busy(false)
+    turn.pending = false
+    if (failed) {
+      turn.error = true
+      turn.text = /Gmail|mcp/i.test(failed) ? `Gmail isn't reachable through Claude right now (${failed}). Check the Gmail connector at claude.ai.` : failed
+      return this.update(turn)
+    }
+    const reply = parseReply(raw)
+    turn.text = reply.shown || 'No answer came back.'
+    turn.spoken = reply.spoken
+    this.update(turn)
+    if (reply.spoken) this.ev.speak(turn.id, reply.spoken)
   }
 
   async remember(m: MemoryWrite, origin: string, isPrivate: boolean, quiet = false) {

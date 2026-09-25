@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ModelChoice, ProviderHealth, Settings, VoiceHealth } from '../../../core/types'
+import { UsageDetail, type UsageState } from '../components/Usage'
 
 const CODEX_MODELS = ['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra', 'gpt-5.6-luna']
 const CLAUDE_MODELS = ['haiku', 'sonnet', 'opus']
@@ -127,7 +128,7 @@ function ModelPicker({ value, onChange, localModels, allowLocal = true }: { valu
   )
 }
 
-export function SettingsView({ settings, voice, onChange }: { settings: Settings; voice: VoiceHealth; onChange: (s: Settings) => void }) {
+export function SettingsView({ settings, voice, usage, onChange }: { settings: Settings; voice: VoiceHealth; usage: UsageState; onChange: (s: Settings) => void }) {
   const api = window.bluevis
   const [health, setHealth] = useState<ProviderHealth[] | null>(null)
   const [roots, setRoots] = useState(settings.projectRoots.join('\n'))
@@ -147,6 +148,12 @@ export function SettingsView({ settings, voice, onChange }: { settings: Settings
           <p className="panel-sub" style={{ margin: 0 }}>
             Changes save immediately.
           </p>
+        </div>
+
+        <div className="section">
+          <h3>Usage</h3>
+          <p>As reported by Codex and Claude themselves. Each number shows when it was observed.</p>
+          <UsageDetail usage={usage} />
         </div>
 
         <div className="section">

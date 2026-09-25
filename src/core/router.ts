@@ -17,6 +17,7 @@ export type Intent =
   | { type: 'switch-brain'; provider: 'codex' | 'claude' | 'local' }
   | { type: 'new-conversation' }
   | { type: 'relay'; url: string; note?: string }
+  | { type: 'mail'; text: string }
 
 const AGENT_WORDS: Record<string, { agent: AgentName; model?: string }> = {
   codex: { agent: 'codex' },
@@ -101,6 +102,11 @@ export function route(raw: string, projects: string[] = []): Intent {
     const priv = /\b(keep (?:it|this|that) (?:private|local)|out of (?:cloud|agent)[- ]?(?:agent )?handoffs?)\b/i.test(rem[1])
     const body = rem[1].replace(/[,;]?\s*(?:but\s+)?keep (?:it|this|that) (?:private|local|out of (?:cloud|agent)[- ]?(?:agent )?handoffs?)\.?$/i, '').trim()
     return { type: 'remember', text: body, kind: 'fact', private: priv }
+  }
+
+  // Questions about email go to Claude with read-only Gmail tools.
+  if (/\b(e-?mails?|inbox|gmail|mailbox|OAs?|online assessments?|hackerrank|codesignal|recruiters?|interview (?:invites?|requests?)|rejections?|offers? letters?)\b/i.test(text) && !/^(remember|note|save)\b/i.test(lower)) {
+    return { type: 'mail', text }
   }
 
   const open = lower.match(/^(?:open|pull up|show me|go to)\s+(?:the\s+)?(.+?)(?:\s+(?:project|repo|folder))?$/)

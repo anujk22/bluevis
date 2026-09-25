@@ -147,7 +147,14 @@ function Column({ stage: s, index, wide, onPick }: { stage: StageRun; index: num
         )}
         {s.status === 'waiting' && <p className="waiting">Waiting for the previous stage.</p>}
         {s.status === 'running' && !s.text && s.events.length === 0 && <p className="waiting">Reading and thinking. Output appears here as it streams.</p>}
-        {s.text && (index === 0 ? <pre className="page-text">{s.text.slice(0, wide ? 12000 : 1500)}</pre> : <Markdown text={wide ? s.text : s.text.slice(0, 1200)} />)}
+        {s.text &&
+          (index === 0 ? (
+            <pre className="page-text">{s.text.slice(0, wide ? 12000 : 1500)}</pre>
+          ) : wide ? (
+            <Markdown text={s.text} />
+          ) : (
+            <p className="preview">{s.text.replace(/[#*`>|_-]+/g, ' ').replace(/\s+/g, ' ').slice(0, 700)}</p>
+          ))}
         {s.error && <p className="notice">{s.error}</p>}
       </div>
     </article>

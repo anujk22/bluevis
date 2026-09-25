@@ -20,6 +20,9 @@ export type AgentEvent =
   | { kind: 'plan'; items: { text: string; done: boolean }[] }
   | { kind: 'usage'; input: number; output: number }
   | { kind: 'warning'; message: string }
+  | { kind: 'limits'; raw: unknown }
+  /** Live progress that replaces the previous progress line (e.g. thinking token counts). */
+  | { kind: 'progress'; label: string }
   | { kind: 'error'; message: string }
   | { kind: 'done' }
 
@@ -92,6 +95,8 @@ export interface Turn {
   /** Vault passages the model was given for this reply. */
   sources?: SourceRef[]
   relayId?: string
+  /** Tool calls made while answering (e.g. Gmail searches), shown so answers are not a black box. */
+  activity?: string[]
 }
 
 export interface TurnAction {

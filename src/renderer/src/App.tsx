@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentTask, ModelChoice, OrbMode, Settings, Turn, VoiceHealth } from '../../core/types'
 import { Close, Gear, Shrink } from './components/icons'
+import { UsageChips, useUsage } from './components/Usage'
 import { Orb } from './orb/Orb'
 import { Listener, Speaker } from './voice'
 import { Talk } from './views/Talk'
@@ -38,6 +39,7 @@ export function App() {
   const [shot, setShot] = useState<Shot | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [focusTask, setFocusTask] = useState<string | null>(null)
+  const usage = useUsage()
   const [relays, setRelays] = useState<Record<string, RelayRun>>({})
   const [focusRelay, setFocusRelay] = useState<string | null>(null)
 
@@ -198,6 +200,7 @@ export function App() {
           ))}
         </nav>
         <div className="header-right">
+          <UsageChips usage={usage} onOpen={() => setView('settings')} />
           {ctx.activeProject && (
             <button className="chip" title="Active project. Click to clear." onClick={() => api.projects.activate()}>
               <span className="dot" />
@@ -258,7 +261,7 @@ export function App() {
         {view === 'agents' && <Agents tasks={taskList} focus={focusTask} onFocus={setFocusTask} settings={settings} />}
         {view === 'relays' && <Relays runs={relayList} focus={focusRelay} onFocus={setFocusRelay} />}
         {view === 'memory' && <Memory />}
-        {view === 'settings' && settings && <SettingsView settings={settings} voice={voice} onChange={setSettings} />}
+        {view === 'settings' && settings && <SettingsView settings={settings} voice={voice} usage={usage} onChange={setSettings} />}
       </main>
     </div>
   )

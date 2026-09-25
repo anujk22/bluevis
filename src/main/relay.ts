@@ -149,7 +149,11 @@ export class RelayManager {
           else if (e.kind === 'reasoning') s.events.push({ at: Date.now(), label: `thinking: ${e.text.replace(/\*\*/g, '').split('\n')[0].slice(0, 140)}` })
           else if (e.kind === 'tool' && e.name) s.events.push({ at: Date.now(), label: `${e.name}${e.detail ? ` · ${String(e.detail).slice(0, 100)}` : ''}` })
           else if (e.kind === 'command' && e.status === 'running') s.events.push({ at: Date.now(), label: `$ ${e.command.slice(0, 120)}` })
-          else if (e.kind === 'error') failed = e.message
+          else if (e.kind === 'progress') {
+            const last = s.events.at(-1)
+            if (last?.progress) last.label = e.label
+            else s.events.push({ at: Date.now(), label: e.label, progress: true })
+          } else if (e.kind === 'error') failed = e.message
           this.emit(run)
         }
       })

@@ -161,6 +161,12 @@ describe('router', () => {
     expect(route('https://treehacks-2025.devpost.com/rules', projects)).toEqual({ type: 'relay', url: 'https://treehacks-2025.devpost.com/rules', note: undefined })
   })
 
+  it('sends email questions to the mail path', () => {
+    expect(route('any OAs due this week?', projects)).toEqual({ type: 'mail', text: 'any OAs due this week?' })
+    expect(route('what did the Wells Fargo recruiter email say', projects)).toMatchObject({ type: 'mail' })
+    expect(route('remember that I check email at 9', projects)).toMatchObject({ type: 'remember' })
+  })
+
   it('opens only known projects, otherwise chats', () => {
     expect(route('open yonder', projects)).toEqual({ type: 'open', target: 'Yonder' })
     expect(route('open the pod bay doors', projects)).toMatchObject({ type: 'chat' })

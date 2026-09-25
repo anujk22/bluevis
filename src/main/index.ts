@@ -6,7 +6,8 @@ import { Brain, label } from './brain'
 import { Importer } from './importer'
 import { RelayManager } from './relay'
 import { discoverProjects } from './projects'
-import { providerHealth } from './providers'
+import { onRateLimits, providerHealth } from './providers'
+import { UsageService } from './usage'
 import { getSettings, updateSettings } from './settings'
 import { adoptLoginShellPath, run } from './shell'
 import { TaskManager } from './tasks'
@@ -167,6 +168,14 @@ app.whenReady().then(async () => {
   ipcMain.handle('relays:list', () => relays.list())
   ipcMain.handle('relays:start', (_e, url: string, note?: string) => relays.start(url, note))
   ipcMain.handle('relays:stop', (_e, id: string) => relays.stop(id))
+
+  const usage = new UsageService((u) => send('usage', u))
+  onRateLimits((raw) => usage.recordClaude(raw))
+  ipcMain.handle('usage:get', () => usage.get())
+  ipcMain.handle('usage:refresh-claude', async () => {
+    await usage.refreshClaude(join(app.getPath('userData'), 'workspace'))
+    return usage.get()
+  })
 
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'))
 

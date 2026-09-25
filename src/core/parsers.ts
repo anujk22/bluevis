@@ -103,7 +103,11 @@ export function parseClaudeLine(line: string): AgentEvent[] {
   if (!d) return []
   switch (d.type) {
     case 'system':
-      return d.subtype === 'init' && d.session_id ? [{ kind: 'session', id: d.session_id }] : []
+      if (d.subtype === 'init' && d.session_id) return [{ kind: 'session', id: d.session_id }]
+      if (d.subtype === 'thinking_tokens' && typeof d.estimated_tokens === 'number') {
+        return [{ kind: 'progress', label: `thinking · ~${d.estimated_tokens.toLocaleString('en-US')} tokens` }]
+      }
+      return []
     case 'stream_event': {
       const e = d.event
       if (d.parent_tool_use_id) return []
@@ -128,6 +132,8 @@ export function parseClaudeLine(line: string): AgentEvent[] {
       }
       return out
     }
+    case 'rate_limit_event':
+      return [{ kind: 'limits', raw: d }]
     case 'result':
       if (d.is_error || (d.subtype && d.subtype !== 'success')) {
         return [{ kind: 'error', message: d.result || d.subtype || 'Claude run failed' }]
@@ -153,7 +159,7 @@ function claudeToolUse(block: any): AgentEvent {
   if (['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(block.name) && input.file_path) {
     return { kind: 'file-change', id: block.id, changes: [{ path: input.file_path, kind: block.name === 'Write' ? 'add' : 'update' }] }
   }
-  const detail = input.file_path ?? input.pattern ?? input.query ?? input.url ?? input.description
+  const detail = input.file_path ?? input.pattern ?? input.query ?? input.q ?? input.thread_id ?? input.url ?? input.description
   return { kind: 'tool', id: block.id, name: block.name, detail, status: 'running' }
 }
 

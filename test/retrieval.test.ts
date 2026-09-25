@@ -66,10 +66,34 @@ describe('relay page reading', () => {
     expect(t).toContain('- $11,000 grand')
     expect(t).not.toContain('bad()')
     expect(relayTitle(t, 'https://hacknyu-2025.devpost.com/')).toBe('HackNYU')
+    expect(relayTitle('##\n\n## HackNYU 2025\nx', 'https://a.devpost.com')).toBe('HackNYU 2025')
+    expect(htmlToText('<p>We have detected that you are using an unsupported browser.</p><p>Real</p>')).toBe('Real')
   })
 
   it('normalizes Devpost links', () => {
     expect(devpostRoot('https://HackNYU-2025.devpost.com/rules?x=1')).toBe('https://hacknyu-2025.devpost.com')
     expect(devpostRoot('https://example.com')).toBeNull()
+  })
+})
+
+import { parseClaudeRateLimit, parseCodexRateLimits } from '../src/core/usage'
+
+describe('usage', () => {
+  it('reads the latest Codex rate limits from a session log', () => {
+    const log = [
+      JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', rate_limits: { primary: { used_percent: 10, window_minutes: 10080, resets_at: 100 }, plan_type: 'prolite' } } }),
+      JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', rate_limits: { primary: { used_percent: 32, window_minutes: 10080, resets_at: 200 }, secondary: null, plan_type: 'prolite' } } }),
+      '{"type":"other"}'
+    ].join('\n')
+    expect(parseCodexRateLimits(log, 5)).toEqual({ provider: 'codex', observedAt: 5, plan: 'prolite', windows: [{ name: 'weekly', usedPercent: 32, resetsAt: 200000 }] })
+    expect(parseCodexRateLimits('{"x":1}', 5)).toBeNull()
+  })
+
+  it('reads Claude unified windows', () => {
+    const ev = { type: 'rate_limit_event', rate_limit_info: { unifiedWindows: { five_hour: { utilization: 0.19, resetsAt: 10 }, seven_day: { utilization: 0.53, resetsAt: 20 } } } }
+    expect(parseClaudeRateLimit(ev, 1)?.windows).toEqual([
+      { name: '5-hour', usedPercent: 19, resetsAt: 10000 },
+      { name: 'weekly', usedPercent: 53, resetsAt: 20000 }
+    ])
   })
 })

@@ -258,6 +258,15 @@ function TurnView({ turn, latest, task, tasks, onOpenTask, relay, onOpenRelay }:
           {rest.length > 0 && <Markdown className="detail" text={rest.join('\n\n')} />}
         </>
       )}
+      {turn.activity && turn.activity.length > 0 && (
+        <ul className="events" style={{ marginTop: 12 }}>
+          {turn.activity.map((a, i) => (
+            <li key={i} className="mono">
+              {a}
+            </li>
+          ))}
+        </ul>
+      )}
       {!turn.pending && turn.sources && turn.sources.length > 0 && (
         <div className="sources-line">
           <span className="eyebrow">From your vault</span>

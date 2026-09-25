@@ -1932,7 +1932,7 @@ kbd {
   position: relative;
   display: flex;
   flex-basis: 0;
-  min-width: 0;
+  min-width: 150px;
   transition: flex-grow 0.8s var(--ease);
 }
 
@@ -2091,6 +2091,13 @@ kbd {
   color: var(--faint);
 }
 
+.preview {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--mist);
+}
+
 .waiting {
   color: var(--faint);
   font-size: 12.5px;
@@ -2170,4 +2177,87 @@ kbd {
 
 .voice-play[disabled] {
   opacity: 0.35;
+}
+
+/* ————— Usage ————— */
+
+.usage-chips {
+  display: flex;
+  gap: 10px;
+  padding: 0 10px;
+  height: 28px;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.usage-chips:hover {
+  border-color: var(--line-2);
+}
+
+.usage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  color: var(--mist);
+}
+
+.usage-chip .pct {
+  color: var(--bone-2);
+  font-size: 9.5px;
+}
+
+.meter {
+  display: inline-block;
+  width: 34px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  background: var(--bone-2);
+}
+
+.usage-chip[data-high='true'] .meter i,
+.meter[data-high='true'] i {
+  background: var(--amber);
+}
+
+.usage-chip[data-high='true'] .pct {
+  color: var(--amber);
+}
+
+.meter.wide {
+  width: 100%;
+  height: 4px;
+  margin-top: 6px;
+}
+
+.usage-detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.usage-card {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.usage-card .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.usage-window {
+  margin-top: 12px;
+  font-size: 13px;
 }
