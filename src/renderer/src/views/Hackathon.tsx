@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { formatLeft, hackStatus, type Hackathon } from '../../../core/hackathon'
 import type { AgentTask } from '../../../core/types'
 import { Markdown } from '../components/Markdown'
 import { TaskStatus } from '../components/TaskStatus'
-import { Listener } from '../voice'
 
 const toLocal = (t: number) => {
   const d = new Date(t)
@@ -174,8 +173,6 @@ export function HackDashboard({ h, tasks, onOpenTerminal, onOpenTask }: { h: Hac
         </section>
       </div>
 
-      <Rehearse h={h} />
-
       <section className="card">
         <div className="card-head">
           <h3>Submission kit</h3>
@@ -209,74 +206,5 @@ export function HackDashboard({ h, tasks, onOpenTerminal, onOpenTask }: { h: Hac
         )}
       </section>
     </div>
-  )
-}
-
-function Rehearse({ h }: { h: Hackathon }) {
-  const api = window.bluevis
-  const listener = useRef<Listener | null>(null)
-  const [state, setState] = useState<'idle' | 'recording' | 'judging'>('idle')
-  const [started, setStarted] = useState(0)
-  const [, tick] = useState(0)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
-    if (state !== 'recording') return
-    const id = setInterval(() => tick((n) => n + 1), 250)
-    return () => clearInterval(id)
-  }, [state])
-  const record = async () => {
-    setError(null)
-    listener.current = new Listener()
-    setState('recording')
-    const t0 = Date.now()
-    setStarted(t0)
-    const r = await listener.current.listen({ untilStop: true, maxSeconds: 300 })
-    const seconds = (Date.now() - t0) / 1000
-    if (!('wav' in r)) {
-      setState('idle')
-      if (r.reason === 'error') setError(r.message ?? 'Microphone unavailable')
-      return
-    }
-    setState('judging')
-    try {
-      await api.hackathons.rehearse(h.id, r.wav, seconds)
-    } catch (e) {
-      setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
-    }
-    setState('idle')
-  }
-  const last = h.rehearsals.at(-1)
-  const secs = Math.floor((Date.now() - started) / 1000)
-  return (
-    <section className="card rehearse">
-      <div className="card-head">
-        <h3>Pitch rehearsal</h3>
-        {state === 'recording' ? (
-          <button className="btn btn-primary" onClick={() => listener.current?.stop()}>
-            Stop at {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}
-          </button>
-        ) : (
-          <button className="btn" disabled={state === 'judging'} onClick={record}>
-            {state === 'judging' ? 'Listening back…' : last ? 'Run it again' : 'Start rehearsing'}
-          </button>
-        )}
-      </div>
-      {state === 'recording' && <div className="rec-bar" style={{ width: `${Math.min(100, (secs / 90) * 100)}%` }} data-over={secs > 90} />}
-      {error && <p className="notice">{error}</p>}
-      {last ? (
-        <div className="critique">
-          <div className="mono" style={{ color: 'var(--faint)' }}>
-            Take {h.rehearsals.length} · {Math.round(last.seconds)}s
-          </div>
-          <Markdown text={last.critique} />
-          <details>
-            <summary className="eyebrow">What you said</summary>
-            <p className="transcript">{last.transcript}</p>
-          </details>
-        </div>
-      ) : (
-        <p className="panel-sub">Pitch out loud as if the judges were in front of you. Bluevis times it and critiques it against the judging criteria and the hook. Audio stays on your Mac; only the transcript is sent.</p>
-      )}
-    </section>
   )
 }

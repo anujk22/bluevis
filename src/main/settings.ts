@@ -16,7 +16,7 @@ export function defaults(): Settings {
   return {
     brain: { provider: 'codex', model: 'gpt-6-luna', effort: 'low' },
     worker: { provider: 'codex', model: 'gpt-6-sol', effort: 'medium' },
-    localBaseUrl: 'http://127.0.0.1:11234/v1',
+    localBaseUrl: 'http://127.0.0.1:8000/v1',
     voice: { enabled: true, ttsVoice: 'bm_george', speed: 1.05, speak: true },
     // Internship/work folders are deliberately not scanned (work boundary, PRD §4.5).
     projectRoots: ['Personal', 'Hackathons', 'School', 'Classes', 'Clubs'].map((d) => join(homedir(), 'Documents', 'Coding', d)),
@@ -34,6 +34,8 @@ export function getSettings(): Settings {
     if (existsSync(file())) {
       const saved = JSON.parse(readFileSync(file(), 'utf8'))
       cached = { ...d, ...saved, voice: { ...d.voice, ...saved.voice } }
+      // Gemini was removed as a provider; a saved Gemini brain falls back to the default.
+      if (saved.brain?.provider === 'gemini') cached!.brain = d.brain
       return cached!
     }
   } catch {

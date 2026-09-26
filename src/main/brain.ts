@@ -47,7 +47,6 @@ const IDENTITY = "You're talking with Anuj Kakumanu, a Rutgers CS sophomore and 
 const BRAIN_DEFAULTS: Record<ModelChoice['provider'], ModelChoice> = {
   codex: { provider: 'codex', model: 'gpt-6-luna', effort: 'low' },
   claude: { provider: 'claude', model: 'haiku' },
-  gemini: { provider: 'gemini', model: 'gemini-3.8-flash', effort: 'low' },
   local: { provider: 'local', model: '' }
 }
 
@@ -215,7 +214,7 @@ export class Brain {
         system: PERSONA,
         images: o.images,
         sessionId: o.fresh ? undefined : this.sessions[choice.provider],
-        history: (choice.provider === 'local' || choice.provider === 'gemini') && !o.fresh ? history : undefined,
+        history: choice.provider === 'local' && !o.fresh ? history : undefined,
         localBaseUrl: s.localBaseUrl,
         onEvent: (e) => {
           if (e.kind === 'session' && !o.fresh) this.sessions[choice.provider] = e.id
@@ -456,15 +455,11 @@ Constraints:
 
   private lastBriefAt = 0
 
-  /** The day in under a minute: calendar, Canvas, recruiting email, finished agents, hackathon. Sources are fetched in parallel. */
+  /** The day in under a minute: calendar, Canvas, finished agents, hackathon. Sources are fetched in parallel. */
   private async brief() {
     this.ev.busy(true)
     const since = this.lastBriefAt || Date.now() - 16 * 3600_000
-    const [cal, canvas, mail] = await Promise.all([
-      agendaText(2),
-      canvasBrief(),
-      this.recruitingDigest().catch((e: Error) => `(Gmail unavailable: ${e.message})`)
-    ])
+    const [cal, canvas] = await Promise.all([agendaText(2), canvasBrief()])
     const finished = this.tasks.list().filter((t) => (t.endedAt ?? 0) > since)
     const agents = finished.length
       ? finished.map((t) => `- ${t.title} (${label(t.choice)}, ${t.project ?? t.cwd}): ${t.status}${t.finalMessage ? `. ${t.finalMessage.replace(/\s+/g, ' ').slice(0, 300)}` : ''}`).join('\n')
@@ -474,43 +469,15 @@ Constraints:
     const ctx = [
       `<calendar source="ICS feeds, today and tomorrow">\n${cal}\n</calendar>`,
       canvas ? `<canvas source="Canvas API">\n${canvas}\n</canvas>` : '',
-      `<recruiting_email source="Gmail, read-only, last 14 days">\n${mail}\n</recruiting_email>`,
       `<agents_finished>\n${agents}\n</agents_finished>`
     ]
       .filter(Boolean)
       .join('\n\n')
     return this.chat(
-      'Give me my brief. Speak it in under 45 seconds: the next thing on my calendar, anything due soon that I have not submitted, recruiting deadlines, and what agents finished. Lead with whatever is most urgent. Skip empty sections. Put the full detail after the separator.',
+      'Give me my brief. Speak it in under 45 seconds: the next thing on my calendar, anything due soon that I have not submitted, and what agents finished. Lead with whatever is most urgent. Skip empty sections. Put the full detail after the separator.',
       undefined,
       ctx
     )
-  }
-
-  /** Recruiting emails that need action, as plain lines. Uses Claude with read-only Gmail tools; capped at 75 seconds. */
-  private recruitingDigest(): Promise<string> {
-    const now = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'full', timeStyle: 'short' })
-    return new Promise((resolve, reject) => {
-      let text = ''
-      let failed: string | null = null
-      const handle = runProvider({
-        choice: { provider: 'claude', model: 'sonnet', effort: 'low' },
-        prompt: `Now: ${now} (America/New_York). Using the Gmail tools (read-only), find recruiting emails from the last 14 days that need action or have a deadline: online assessments, interview scheduling, offers, forms. Reply with one line per item: date, sender, subject, deadline in America/New_York if stated, action needed. Newest deadlines first. If none, reply "None found" and name the searches you ran.`,
-        cwd: this.workspace,
-        role: 'brain',
-        tools: GMAIL_READ,
-        denyTools: GMAIL_WRITE,
-        onEvent: (e) => {
-          if (e.kind === 'message') text = e.text
-          if (e.kind === 'error') failed = e.message
-        }
-      })
-      const timer = setTimeout(() => handle.stop(), 75_000)
-      void handle.done.then(() => {
-        clearTimeout(timer)
-        if (text) resolve(text)
-        else reject(new Error(failed ?? 'no answer'))
-      })
-    })
   }
 
   private async status() {
@@ -630,8 +597,7 @@ ${note}
 export function label(c: ModelChoice): string {
   if (c.provider === 'codex') return c.model.replace(/^gpt-/, 'GPT-').replace(/-(\w)/g, (_, x: string) => `-${x.toUpperCase()}`)
   if (c.provider === 'claude') return `Claude ${c.model[0].toUpperCase()}${c.model.slice(1)}`
-  if (c.provider === 'gemini') return c.model.replace(/^gemini-/, 'Gemini ').replace(/-(\w)/g, (_, x: string) => ` ${x.toUpperCase()}`)
-  return c.model ? c.model.split('/').pop()!.slice(0, 24) : 'Local model'
+  return c.model ? c.model.split('/').pop()!.replace(/-Splash$/, '').slice(0, 24) : 'Local model'
 }
 
 function friendlyError(message: string, choice: ModelChoice): string {

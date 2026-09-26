@@ -3,7 +3,7 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 // API keys and tokens, encrypted with the macOS keychain. Never written to settings.json.
-export type SecretName = 'gemini' | 'canvas'
+export type SecretName = 'canvas'
 
 const file = (name: SecretName) => join(app.getPath('userData'), `${name}.key`)
 
@@ -20,4 +20,3 @@ export function setSecret(name: SecretName, value: string | null) {
   else rmSync(file(name), { force: true })
 }
 
-export const geminiKey = () => getSecret('gemini')

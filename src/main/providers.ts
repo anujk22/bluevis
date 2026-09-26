@@ -2,9 +2,8 @@ import type { ChildProcess } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { parseClaudeLine, parseCodexLine, parseGeminiSSELine, parseOpenAISSELine, LineBuffer } from '../core/parsers'
+import { parseClaudeLine, parseCodexLine, parseOpenAISSELine, LineBuffer } from '../core/parsers'
 import type { AgentEvent, ModelChoice, ProviderHealth } from '../core/types'
-import { geminiKey } from './secrets'
 import { run, spawnLines } from './shell'
 
 export interface RunOptions {
@@ -17,7 +16,7 @@ export interface RunOptions {
   images?: string[]
   /** Persona / system instructions. Codex receives them inline on the first turn. */
   system?: string
-  /** Prior turns, used by the stateless providers (Gemini, local). */
+  /** Prior turns, used by the stateless local provider. */
   history?: { role: 'user' | 'assistant'; content: string }[]
   localBaseUrl?: string
   /** Claude only: exact tool allowlist for this run (replaces the brain's default read-only set). */
@@ -43,7 +42,6 @@ export function onRateLimits(fn: (raw: unknown) => void) {
 export function runProvider(o: RunOptions): RunHandle {
   if (o.choice.provider === 'codex') return runCodex(o)
   if (o.choice.provider === 'claude') return runClaude(o)
-  if (o.choice.provider === 'gemini') return runGemini(o)
   return runLocal(o)
 }
 
@@ -136,41 +134,6 @@ function runClaude(o: RunOptions): RunHandle {
   return cliRun('claude', args, o, parseClaudeLine, prompt)
 }
 
-const GEMINI_API = 'https://generativelanguage.googleapis.com/v1beta/models'
-
-function runGemini(o: RunOptions): RunHandle {
-  // Direct Gemini API: stateless, so prior turns travel with each request.
-  const controller = new AbortController()
-  const done = (async () => {
-    try {
-      const key = geminiKey()
-      if (!key) throw new Error('Add a Gemini API key in Settings, under Models.')
-      const images = (o.images ?? []).map((p) => ({ inlineData: { mimeType: p.endsWith('.png') ? 'image/png' : 'image/jpeg', data: readFileSync(p).toString('base64') } }))
-      const contents = [
-        ...(o.history ?? []).map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-        { role: 'user', parts: [...images, { text: o.prompt }] }
-      ]
-      const res = await fetch(`${GEMINI_API}/${o.choice.model}:streamGenerateContent?alt=sse`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          ...(o.system ? { systemInstruction: { parts: [{ text: o.system }] } } : {}),
-          contents,
-          ...(o.choice.effort ? { generationConfig: { thinkingConfig: { thinkingLevel: o.choice.effort } } } : {})
-        }),
-        signal: controller.signal
-      })
-      if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error?.message ?? `Gemini returned ${res.status}`)
-      const text = await streamSSE(res.body, parseGeminiSSELine, o)
-      o.onEvent({ kind: 'message', text: text.trim() })
-      o.onEvent({ kind: 'done' })
-    } catch (e) {
-      o.onEvent({ kind: 'error', message: (e as Error).name === 'AbortError' ? 'Stopped' : (e as Error).message })
-    }
-  })()
-  return { stop: () => controller.abort(), done }
-}
-
 /** Forward streamed text deltas and return the full text. Stream errors are thrown. */
 async function streamSSE(body: ReadableStream<Uint8Array>, parse: (line: string) => AgentEvent[], o: RunOptions): Promise<string> {
   const buf = new LineBuffer()
@@ -198,12 +161,18 @@ function runLocal(o: RunOptions): RunHandle {
       const messages = [
         ...(o.system ? [{ role: 'system', content: o.system }] : []),
         ...(o.history ?? []),
-        { role: 'user', content: o.prompt }
+        {
+          role: 'user',
+          content: o.images?.length
+            ? [...o.images.map((p) => ({ type: 'image_url', image_url: { url: `data:image/${p.endsWith('.png') ? 'png' : 'jpeg'};base64,${readFileSync(p).toString('base64')}` } })), { type: 'text', text: o.prompt }]
+            : o.prompt
+        }
       ]
       const res = await fetch(`${base}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: o.choice.model, messages, stream: true }),
+        // Qwen thinks by default, which delays the first spoken word by seconds; conversation turns it off unless an effort is chosen.
+        body: JSON.stringify({ model: o.choice.model, messages, stream: true, reasoning_effort: o.choice.effort ?? 'none' }),
         signal: controller.signal
       })
       if (!res.ok || !res.body) throw new Error(`Local model returned ${res.status}`)
@@ -230,7 +199,6 @@ export async function providerHealth(localBaseUrl: string): Promise<ProviderHeal
   return [
     { provider: 'codex', ok: codex.code === 0, detail: codex.code === 0 ? codex.stdout.trim() : 'codex CLI not found' },
     { provider: 'claude', ok: claude.code === 0, detail: claude.code === 0 ? claude.stdout.trim() : 'claude CLI not found' },
-    { provider: 'gemini', ok: !!geminiKey(), detail: geminiKey() ? 'API key saved' : 'no API key' },
     {
       provider: 'local',
       ok: !!local,

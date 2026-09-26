@@ -5,7 +5,6 @@ import { UsageDetail, type UsageState } from '../components/Usage'
 
 const CODEX_MODELS = ['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra', 'gpt-5.6-luna']
 const CLAUDE_MODELS = ['haiku', 'sonnet', 'opus']
-const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.8-pro']
 interface VoiceOption {
   id: string
   name: string
@@ -140,7 +139,7 @@ function Calendars({ settings, save }: { settings: Settings; save: (p: Partial<S
 }
 
 function ModelPicker({ value, onChange, localModels, allowLocal = true }: { value: ModelChoice; onChange: (c: ModelChoice) => void; localModels: string[]; allowLocal?: boolean }) {
-  const models = value.provider === 'codex' ? CODEX_MODELS : value.provider === 'claude' ? CLAUDE_MODELS : value.provider === 'gemini' ? GEMINI_MODELS : localModels
+  const models = value.provider === 'codex' ? CODEX_MODELS : value.provider === 'claude' ? CLAUDE_MODELS : localModels
   return (
     <div className="ctrl">
       <select
@@ -154,16 +153,13 @@ function ModelPicker({ value, onChange, localModels, allowLocal = true }: { valu
               ? { provider: 'codex', model: 'gpt-6-luna', effort: 'low' }
               : p === 'claude'
                 ? { provider: 'claude', model: 'haiku' }
-                : p === 'gemini'
-                  ? { provider: 'gemini', model: 'gemini-3.8-flash', effort: 'low' }
-                  : { provider: 'local', model: localModels[0] ?? '' }
+                : { provider: 'local', model: localModels[0] ?? '' }
           )
         }}
       >
         <option value="codex">Codex</option>
         <option value="claude">Claude</option>
-        {allowLocal && <option value="gemini">Gemini</option>}
-        {allowLocal && <option value="local">Local (mlx-serve)</option>}
+        {allowLocal && <option value="local">Local</option>}
       </select>
       <select className="select" value={value.model} aria-label="Model" onChange={(e) => onChange({ ...value, model: e.target.value })}>
         {!models.includes(value.model) && <option value={value.model}>{value.model || 'no models found'}</option>}
@@ -392,13 +388,6 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
               <input className="input mono" defaultValue={settings.localBaseUrl} onBlur={(e) => e.target.value !== settings.localBaseUrl && save({ localBaseUrl: e.target.value })} aria-label="Local model server URL" />
             </div>
           </div>
-          <SecretField
-            label="Gemini API key"
-            saved={!!health?.find((h) => h.provider === 'gemini' && h.ok)}
-            placeholder="Paste a key from aistudio.google.com"
-            save={async (v) => (await api.providers.setGeminiKey(v)) as SaveResult}
-            onSaved={() => void api.providers.health().then((h) => setHealth(h as ProviderHealth[]))}
-          />
           <div className="health" style={{ marginTop: 14 }}>
             {(health ?? []).map((h) => (
               <div key={h.provider}>

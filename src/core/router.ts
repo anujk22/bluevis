@@ -15,7 +15,7 @@ export type Intent =
   | { type: 'brief' }
   | { type: 'stop-task'; agent?: AgentName }
   | { type: 'stop-speech' }
-  | { type: 'switch-brain'; provider: 'codex' | 'claude' | 'gemini' | 'local' }
+  | { type: 'switch-brain'; provider: 'codex' | 'claude' | 'local' }
   | { type: 'new-conversation' }
   | { type: 'relay'; url: string; note?: string }
   | { type: 'mail'; text: string }
@@ -70,8 +70,8 @@ export function route(raw: string, projects: string[] = []): Intent {
   const stop = lower.match(/^(?:stop|cancel|kill|abort)\s+(?:the\s+)?(codex|claude|agent|task)s?\b/)
   if (stop) return { type: 'stop-task', agent: stop[1] === 'codex' || stop[1] === 'claude' ? stop[1] : undefined }
 
-  const sw = lower.match(/^(?:switch to|use)\s+(codex|gpt|claude|gemini|local|the local model)(?:\s+(?:for chat|as (?:the )?brain))?$/)
-  if (sw) return { type: 'switch-brain', provider: sw[1] === 'claude' ? 'claude' : sw[1] === 'gemini' ? 'gemini' : sw[1].includes('local') ? 'local' : 'codex' }
+  const sw = lower.match(/^(?:switch to|use)\s+(codex|gpt|claude|qwen|local|the local model)(?:\s+(?:for chat|as (?:the )?brain))?$/)
+  if (sw) return { type: 'switch-brain', provider: sw[1] === 'claude' ? 'claude' : sw[1] === 'qwen' || sw[1].includes('local') ? 'local' : 'codex' }
 
   if (/^(new (conversation|chat)|start over|fresh (context|start))$/.test(lower)) return { type: 'new-conversation' }
 

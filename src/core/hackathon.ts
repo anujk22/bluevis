@@ -18,13 +18,6 @@ export interface Criterion {
   coveredBy: string
 }
 
-export interface Rehearsal {
-  at: number
-  seconds: number
-  transcript: string
-  critique: string
-}
-
 export interface SubmissionKit {
   writeup: string
   script: string
@@ -38,7 +31,7 @@ export interface Hackathon {
   url: string
   relayId?: string
   plan: string
-  /** The hook the plan chose, used to judge rehearsals. */
+  /** The hook the plan chose: the demo moment the script is built around. */
   hook: string
   startedAt: number
   deadline: number
@@ -46,7 +39,6 @@ export interface Hackathon {
   milestones: Milestone[]
   criteria: Criterion[]
   kit?: SubmissionKit
-  rehearsals: Rehearsal[]
   active: boolean
 }
 

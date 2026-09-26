@@ -3204,73 +3204,13 @@ kbd {
   margin-top: 12px;
 }
 
-.kit summary,
-.critique summary {
+.kit summary {
   cursor: pointer;
 }
 
-.rec-bar {
-  height: 3px;
-  border-radius: 3px;
-  background: var(--sky);
-  box-shadow: 0 0 10px rgb(from var(--beam) r g b / 0.8);
-  transition: width 0.25s linear;
-  margin-bottom: 10px;
-}
 
-.rec-bar[data-over='true'] {
-  background: var(--amber);
-}
 
-.critique .transcript {
-  color: var(--mist);
-  font-size: 13px;
-  white-space: pre-wrap;
-}
 
-.tonight {
-  border: 1px dashed var(--line-2);
-  border-radius: 14px;
-  padding: 10px 12px;
-  margin: -6px 0 16px;
-}
 
-.tonight input[type='time'] {
-  height: 26px;
-  font-size: 11px;
-  width: 104px;
-  min-width: 0;
-}
 
-.queued {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--line);
-}
 
-.queued .mono {
-  color: var(--faint);
-  grid-column: 1;
-}
-
-.queued .t {
-  grid-column: 1;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.queued button {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
-}
-
-.tonight .fine {
-  margin: 8px 0 0;
-  font-size: 11px;
-  color: var(--faint);
-}

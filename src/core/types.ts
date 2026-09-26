@@ -2,7 +2,7 @@
 
 import type { Accent } from './color'
 
-export type ProviderId = 'codex' | 'claude' | 'gemini' | 'local'
+export type ProviderId = 'codex' | 'claude' | 'local'
 
 export interface ModelChoice {
   provider: ProviderId

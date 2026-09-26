@@ -3,7 +3,7 @@ import type { AgentTask, ModelChoice, OrbMode, Settings, Turn, VoiceHealth } fro
 import { Search } from './components/icons'
 import { UsageChips, useUsage } from './components/Usage'
 import { AccountMenu, AttentionMenu, ModelMenu, type AttentionItem } from './components/HeaderMenus'
-import { allowanceNudge } from '../../core/queue'
+import { allowanceNudge } from '../../core/usage'
 import { Orb } from './orb/Orb'
 import { Listener, Speaker } from './voice'
 import { Talk } from './views/Talk'
@@ -73,17 +73,11 @@ export function App() {
   }, [hack?.id])
   // The heartbeat quickens over the last twelve hours before the deadline.
   const behind = hack ? hackStatus(hack, clock).behind.length : 0
-  const [queued, setQueued] = useState(0)
-  useEffect(() => {
-    void api.queue.get().then((q) => setQueued((q as { items: unknown[] }).items.length))
-    const off = api.on('queue', (q) => setQueued((q as { items: unknown[] }).items.length))
-    return () => void off()
-  }, [api])
   const nudge = allowanceNudge(usage.codex, Date.now())
   const attention: AttentionItem[] = [
     ...(hack && behind ? [{ key: 'hack-behind', label: `Behind schedule · ${hack.title}`, detail: hackStatus(hack, clock).behind.map((m) => m.title).join(', '), go: () => (setFocusRelay(hack.id), setView('relays')), tone: 'warm' as const }] : []),
     ...(nudge
-      ? [{ key: 'allowance', label: `${nudge.left}% of your Codex week resets in ${nudge.hours}h`, detail: queued ? `Run the ${queued} queued task${queued > 1 ? 's' : ''} now?` : 'Queue work in Work to use it before it resets.', go: () => setView('agents'), tone: 'warm' as const }]
+      ? [{ key: 'allowance', label: `${nudge.left}% of your Codex week resets in ${nudge.hours}h`, detail: 'Start an agent in Work to use it before it resets.', go: () => setView('agents'), tone: 'warm' as const }]
       : [])
   ]
   const urgency = hack ? Math.min(1, Math.max(0, 1 - (hack.deadline - clock) / (12 * 3600_000))) : 0

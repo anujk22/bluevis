@@ -9,7 +9,6 @@ import { discoverProjects } from './projects'
 import { HistoryService } from './history'
 import { TerminalManager } from './terminals'
 import { HackathonManager } from './hackathon'
-import { QueueManager } from './queue'
 import { onRateLimits, providerHealth } from './providers'
 import { UsageService } from './usage'
 import { getSecret, setSecret } from './secrets'
@@ -19,6 +18,7 @@ import { adoptLoginShellPath, run } from './shell'
 import { TaskManager } from './tasks'
 import { Vault } from './vault'
 import { VoiceService } from './voice'
+import { ensureSplash, stopSplash } from './splash'
 
 type Mode = 'compact' | 'expanded'
 
@@ -211,18 +211,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('hack:scaffold', (_e, id: string) => hackathons.scaffold(id))
   ipcMain.handle('hack:agents', (_e, id: string, ids: string[], agent: 'codex' | 'claude') => hackathons.agents(id, ids, agent))
   ipcMain.handle('hack:kit', (_e, id: string) => hackathons.kit(id))
-  ipcMain.handle('hack:rehearse', async (_e, id: string, wav: ArrayBuffer, seconds: number) => {
-    const transcript = await voice.transcribe(wav)
-    if (!transcript.trim()) throw new Error('No speech was heard in that take.')
-    return hackathons.rehearse(id, transcript, seconds)
-  })
 
-  const queue = new QueueManager(tasks, (q) => send('queue', q))
-  ipcMain.handle('queue:get', () => queue.get())
-  ipcMain.handle('queue:add', (_e, t: { prompt: string; project: string; projectPath: string; agent: 'codex' | 'claude' }) => queue.add(t))
-  ipcMain.handle('queue:remove', (_e, id: string) => queue.remove(id))
-  ipcMain.handle('queue:run-at', (_e, at: string) => queue.setRunAt(at))
-  ipcMain.handle('queue:run', () => void queue.run())
 
   const terminals = new TerminalManager(send)
   brain.terminals = terminals
@@ -267,6 +256,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
     const s = updateSettings(patch)
     send('context', { ...brain.context(), brainLabel: label(s.brain) })
+    if (patch.brain) void ensureSplash()
     return s
   })
   ipcMain.handle('providers:health', () => providerHealth(getSettings().localBaseUrl))
@@ -298,24 +288,7 @@ app.whenReady().then(async () => {
     await signOutCanvas()
     send('settings', updateSettings({ canvasSignedIn: false }))
   })
-  ipcMain.handle('secrets:has', (_e, name: 'gemini' | 'canvas') => !!getSecret(name))
-  // Check the key against the model before keeping it; a working key makes Gemini Flash the conversation model.
-  ipcMain.handle('gemini:set-key', async (_e, raw: string) => {
-    const key = raw.trim()
-    if (!key) {
-      setSecret('gemini', null)
-      return { ok: true }
-    }
-    const model = 'gemini-3.8-flash'
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}`, { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(10000) }).catch((e: Error) => e)
-    if (res instanceof Error) return { ok: false, error: `Could not reach Google (${res.message})` }
-    if (!res.ok) return { ok: false, error: ((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error?.message ?? `Google returned ${res.status}` }
-    setSecret('gemini', key)
-    const s = updateSettings({ brain: { provider: 'gemini', model, effort: 'low' } })
-    send('settings', s)
-    send('context', { ...brain.context(), brainLabel: label(s.brain) })
-    return { ok: true }
-  })
+  ipcMain.handle('secrets:has', (_e, name: 'canvas') => !!getSecret(name))
   ipcMain.handle('voice:start', async () => {
     await systemPreferences.askForMediaAccess('microphone').catch(() => false)
     void voice.start()
@@ -356,9 +329,11 @@ app.whenReady().then(async () => {
   })
 
   if (getSettings().voice.enabled) void voice.start()
+  void ensureSplash()
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
     voice.stop()
+    stopSplash()
     tasks.stopAll()
     importer.stop()
   })

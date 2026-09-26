@@ -12,7 +12,7 @@ import { run } from './shell'
 import type { TaskManager } from './tasks'
 import type { Vault } from './vault'
 
-// Extraction, the submission kit and pitch critiques need reliable JSON and judgment, not speed.
+// Extraction and the submission kit need reliable JSON and judgment, not speed.
 const SONNET: ModelChoice = { provider: 'claude', model: 'sonnet' }
 // Test profiles build inside the profile, never in the real Hackathons folder.
 const hackRoot = () => (process.env.BLUEVIS_PROFILE_DIR ? join(app.getPath('userData'), 'Hackathons') : join(homedir(), 'Documents', 'Coding', 'Hackathons'))
@@ -94,7 +94,6 @@ export class HackathonManager {
       deadline: Number.isFinite(deadline) && deadline > now ? deadline : now + 36 * 3600_000,
       milestones: (extracted?.milestones ?? []).map((m) => ({ id: randomUUID(), title: m.title, hour: m.hour, done: false })),
       criteria: (extracted?.criteria ?? []).map((c) => ({ id: randomUUID(), name: c.name, detail: c.detail, coveredBy: '' })),
-      rehearsals: [],
       active: true
     }
     for (const x of this.items) x.active = false
@@ -199,41 +198,6 @@ ${readme || '(none)'}
       tags: ['hackathon', 'submission'],
       source: h.url
     })
-    this.save()
-    return structuredClone(h)
-  }
-
-  /** Critique a spoken pitch against the plan's hook and the judging criteria. */
-  async rehearse(id: string, transcript: string, seconds: number): Promise<Hackathon> {
-    const h = this.get(id)
-    const critique = await ask(
-      `Anuj just rehearsed his hackathon demo pitch out loud. Coach him like a sharp judge who wants him to win. No em dashes. Be specific and brief.
-
-It ran ${Math.round(seconds)} seconds (target: about 90).
-
-<transcript>
-${transcript}
-</transcript>
-
-<intended_hook>${h.hook}</intended_hook>
-<judging>
-${h.criteria.map((c) => `- ${c.name}: ${c.detail}`).join('\n')}
-</judging>
-
-Reply in markdown with exactly these sections:
-## Verdict
-One sentence.
-## Timing
-Over or under, and what to cut or add.
-## The hook
-Did it land, and where it should hit.
-## Criteria
-One line per criterion: covered, weak, or missing.
-## Three fixes
-The three changes that would most improve the next run.`,
-      this.workspace
-    )
-    h.rehearsals.push({ at: Date.now(), seconds, transcript, critique })
     this.save()
     return structuredClone(h)
   }

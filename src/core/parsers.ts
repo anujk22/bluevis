@@ -163,21 +163,6 @@ function claudeToolUse(block: any): AgentEvent {
   return { kind: 'tool', id: block.id, name: block.name, detail, status: 'running' }
 }
 
-/** Parse one SSE line from Gemini's streamGenerateContent?alt=sse. Thought parts are never shown or spoken. */
-export function parseGeminiSSELine(line: string): AgentEvent[] {
-  const t = line.trim()
-  if (!t.startsWith('data:')) return []
-  const d = safeJson(t.slice(5).trim())
-  if (!d) return []
-  if (d.error) return [{ kind: 'error', message: d.error.message ?? 'Gemini error' }]
-  const parts: { text?: string; thought?: boolean }[] = d.candidates?.[0]?.content?.parts ?? []
-  const text = parts
-    .filter((p) => !p.thought && typeof p.text === 'string')
-    .map((p) => p.text)
-    .join('')
-  return text ? [{ kind: 'text-delta', text }] : []
-}
-
 /** Parse one SSE line from an OpenAI-compatible /chat/completions stream. */
 export function parseOpenAISSELine(line: string): AgentEvent[] {
   const t = line.trim()
