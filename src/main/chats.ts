@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cosine } from '../core/retrieval'
+import type { Swarm } from '../core/swarm'
 import type { ChatSummary, ModelChoice, Turn } from '../core/types'
 
 interface SavedChat {
@@ -10,6 +11,7 @@ interface SavedChat {
   at: number
   turns: Turn[]
   sessions: Partial<Record<ModelChoice['provider'], string>>
+  swarms?: Swarm[]
 }
 
 /** Talk conversations, one JSON file each, so any chat can be reopened and continued. */
@@ -37,12 +39,12 @@ export class ChatStore {
     return [...this.index.values()].sort((a, b) => b.at - a.at)
   }
 
-  save(id: string, turns: Turn[], sessions: SavedChat['sessions']) {
+  save(id: string, turns: Turn[], sessions: SavedChat['sessions'], swarms: Swarm[] = []) {
     const first = turns.find((t) => t.speaker === 'user')
     if (!first) return
     const title = first.text.replace(/\s+/g, ' ').slice(0, 80)
     const at = turns.at(-1)?.at ?? Date.now()
-    const chat: SavedChat = { id, title, at, turns, sessions }
+    const chat: SavedChat = { id, title, at, turns, sessions, ...(swarms.length ? { swarms } : {}) }
     writeFileSync(join(this.dir, `${id}.json`), JSON.stringify(chat))
     this.index.set(id, { id, title, at, count: turns.length })
     this.loaded.set(id, structuredClone(chat))

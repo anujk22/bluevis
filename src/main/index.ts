@@ -19,6 +19,7 @@ import { TaskManager } from './tasks'
 import { Vault } from './vault'
 import { VoiceService } from './voice'
 import { ensureSplash, managePower, stopSplash } from './splash'
+import { startIdleWork } from './idle'
 import { self as macSelf } from './mac'
 
 type Mode = 'compact' | 'expanded'
@@ -166,7 +167,8 @@ app.whenReady().then(async () => {
     stopSpeech: () => send('speech:stop'),
     context: (c) => send('context', { ...c, brainLabel: label(c.brain) }),
     settings: (s) => send('settings', s),
-    show: () => setMode('expanded')
+    show: () => setMode('expanded'),
+    swarm: (s) => send('swarm', s)
   })
   macSelf.place = (r) => {
     if (mode !== 'expanded') setMode('expanded', false)
@@ -225,6 +227,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('chat:reset', () => brain.reset())
   ipcMain.handle('chat:turns', () => brain.turns)
   ipcMain.handle('chat:list', () => brain.chats.list())
+  ipcMain.handle('swarm:list', () => brain.swarms.forChat(brain.currentChat))
+  ipcMain.handle('swarm:ask', (_e, swarmId: string, agentId: string, text: string) => brain.swarms.ask(swarmId, agentId, text))
+  ipcMain.handle('swarm:stop', (_e, swarmId: string) => brain.swarms.stop(swarmId))
   ipcMain.handle('dictate:type', (_e, text: string) => brain.dictate(text))
   ipcMain.handle('chat:open', (_e, id: string) => brain.openChat(id))
   ipcMain.handle('chat:context', () => ({ ...brain.context(), brainLabel: label(brain.context().brain) }))
@@ -369,6 +374,7 @@ app.whenReady().then(async () => {
   if (getSettings().voice.enabled) void voice.start()
   void ensureSplash()
   managePower()
+  startIdleWork({ vault, cwd: join(app.getPath('userData'), 'workspace'), embed: (texts) => voice.embed(texts), busy: () => brain.busy })
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
     voice.stop()

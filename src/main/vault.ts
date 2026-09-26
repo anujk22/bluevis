@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { parseNote, safeTitle, serializeNote, tokens, type Frontmatter } from '../core/notes'
@@ -379,6 +379,23 @@ export class Vault {
       .filter((n) => n.area === 'Sessions' && (!project || String(n.data.project ?? '').toLowerCase().includes(project.toLowerCase())))
       .sort((a, b) => b.path.localeCompare(a.path))
     return sessions[0] && { path: sessions[0].path, body: sessions[0].body }
+  }
+
+  /** Auto-captured notes that have not been reviewed: the ones background consolidation may merge. */
+  inbox(): { path: string; title: string; body: string }[] {
+    return this.load()
+      .filter((n) => n.area === 'Inbox' && n.status === 'needs-review' && n.data.share !== 'local-only')
+      .map((n) => ({ path: n.path, title: n.title, body: n.body }))
+  }
+
+  /** Replace several notes with one merged note, as a single commit that can be undone. */
+  async consolidate(paths: string[], title: string, body: string): Promise<string | undefined> {
+    const rel = `Inbox/${safeTitle(title)}.md`
+    for (const p of paths) rmSync(this.safePath(p), { force: true })
+    const data: Frontmatter = { title, type: 'fact', status: 'needs-review', source: `merged by Vesper from ${paths.length} notes`, learned: today(), updated: today() }
+    writeFileSync(this.safePath(rel), serializeNote(data, `# ${title}\n\n${body.trim().replace(/^#\s+.*\n+/, '')}\n\n> Merged from: ${paths.map((p) => p.replace(/^Inbox\/|\.md$/g, '')).join(', ')}. Undo this change in Memory if the merge lost something.\n`))
+    this.cache.clear()
+    return this.commit(`Consolidate memory: ${title} (from ${paths.length} notes)`)
   }
 
   async undo(hash: string): Promise<boolean> {

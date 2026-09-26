@@ -1,6 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { AgentTask, ChatSummary, Narration, Settings, Turn, VoiceHealth } from '../../../core/types'
 import { ThinkingRail, type ThinkLevel } from '../components/ThinkingRail'
+import type { Swarm } from '../../../core/swarm'
+import { AgentDot, TeamPanel } from './Team'
 import type { Shot } from '../App'
 import { Arrow, ArrowRight, Bars, Book, Clip, Clock, Eye, Mic, Person, Plus, SpeakerBrief, SpeakerFull, SpeakerMute, Square } from '../components/icons'
 import { Popover } from '../components/HeaderMenus'
@@ -34,6 +36,7 @@ interface Props {
   onNewChat: () => void
   settings: Settings | null
   onThink: (level: ThinkLevel) => void
+  swarms: Swarm[]
 }
 
 const NARRATION: Record<Narration, { next: Narration; label: string; icon: ReactNode }> = {
@@ -82,9 +85,10 @@ function RecentMenu({ onOpen }: { onOpen: (id: string) => void }) {
   )
 }
 
-function ChatBar(p: Props) {
+function ChatBar(p: Props & { team?: Swarm; teamShown: boolean; onTeam: () => void }) {
   return (
     <div className="chat-bar">
+      {p.teamShown && <span className="eyebrow chat-bar-label">Main chat</span>}
       <Popover
         label="Recent chats"
         align="left"
@@ -99,6 +103,16 @@ function ChatBar(p: Props) {
       <button className="chat-bar-btn" onClick={p.onNewChat}>
         <Plus /> New chat
       </button>
+      {p.team && !p.teamShown && (
+        <button className="chat-bar-btn" onClick={p.onTeam}>
+          <span className="team-dots">
+            {p.team.agents.map((a) => (
+              <AgentDot key={a.id} agent={a} size={10} live={a.messages.some((m) => m.pending)} />
+            ))}
+          </span>
+          Show team
+        </button>
+      )}
     </div>
   )
 }
@@ -156,11 +170,25 @@ export function Talk(p: Props) {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [p.turns])
 
-  const composer = <Composer {...p} />
   const now = useNow()
+  // The newest team in this chat sits beside it until hidden.
+  const team = [...p.swarms].sort((a, b) => b.startedAt - a.startedAt)[0]
+  const [hidden, setHidden] = useState<string | null>(null)
+  const teamShown = !!team && !empty && hidden !== team.id
+  const [draft, setDraft] = useState({ text: '', n: 0 })
+  const composer = <Composer {...p} onSend={(t) => send(t)} draft={draft} placeholder={teamShown ? 'Reply or @name' : undefined} />
+  // "@Juno …" in the main composer goes to that agent; anything else is a normal message.
+  const send = (text: string) => {
+    const m = text.match(/^@(\S+)[\s,:]+([\s\S]+)$/)
+    const agent = m && team?.agents.find((a) => a.name.toLowerCase() === m[1].toLowerCase())
+    if (agent && team) {
+      setHidden(null)
+      void window.bluevis.swarm.ask(team.id, agent.id, m![2].trim())
+    } else p.onSend(text)
+  }
 
   return (
-    <div className="talk" data-empty={empty}>
+    <div className="talk" data-empty={empty} data-team={teamShown}>
       <StatusCorner voice={p.voice} busy={p.busy} />
       <div className="corner corner-right eyebrow">
         {now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
@@ -196,11 +224,13 @@ export function Talk(p: Props) {
         {empty && <div className="footnote eyebrow">⌥⇧Space to talk · ⌥⇧L to look · ⌥Space to hide</div>}
       </div>
 
+      {teamShown && <TeamPanel key={team.id} swarm={team} onHide={() => setHidden(team.id)} onMention={(name) => setDraft((d) => ({ text: `@${name} `, n: d.n + 1 }))} />}
+
       <section className="conversation" aria-label="Conversation">
-        {!empty && <ChatBar {...p} />}
+        {!empty && <ChatBar {...p} team={team} teamShown={teamShown} onTeam={() => setHidden(null)} />}
         <div className="transcript" ref={scroller} role="log">
           {p.turns.map((t) => (
-            <TurnView key={t.id} turn={t} latest={t.id === lastId} task={t.taskId && cardTurn.get(t.taskId) === t.id ? p.tasks[t.taskId] : undefined} tasks={p.tasks} onOpenTask={p.onOpenTask} relay={t.relayId && cardTurn.get(t.relayId) === t.id ? p.relays[t.relayId] : undefined} onOpenRelay={p.onOpenRelay} />
+            <TurnView key={t.id} turn={t} swarm={t.swarmId ? p.swarms.find((s) => s.id === t.swarmId) : undefined} onShowTeam={() => setHidden(null)} latest={t.id === lastId} task={t.taskId && cardTurn.get(t.taskId) === t.id ? p.tasks[t.taskId] : undefined} tasks={p.tasks} onOpenTask={p.onOpenTask} relay={t.relayId && cardTurn.get(t.relayId) === t.id ? p.relays[t.relayId] : undefined} onOpenRelay={p.onOpenRelay} />
           ))}
         </div>
         {!empty && composer}
@@ -220,12 +250,18 @@ function RecentStrip({ onOpen }: { onOpen: (id: string) => void }) {
   )
 }
 
-function Composer(p: Props) {
+function Composer(p: Props & { draft?: { text: string; n: number }; placeholder?: string }) {
   const [text, setText] = useState('')
   const ref = useRef<HTMLTextAreaElement>(null)
   useEffect(() => {
     ref.current?.focus()
   }, [])
+  // Something outside (an agent's @) pre-fills the composer.
+  useEffect(() => {
+    if (!p.draft?.n) return
+    setText(p.draft.text)
+    ref.current?.focus()
+  }, [p.draft?.n])
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
@@ -261,12 +297,13 @@ function Composer(p: Props) {
           <button className="round" aria-pressed={!!p.shot} onClick={p.onShot} title="Look at my screen (⌥⇧L)" aria-label="Attach a screenshot">
             {p.shot ? <Eye /> : <Clip />}
           </button>
+          {p.settings && p.settings.brain.provider !== 'claude' && <ThinkingRail settings={p.settings} onPick={p.onThink} />}
           <span className="composer-sep" aria-hidden="true" />
           <textarea
             ref={ref}
             rows={1}
             value={text}
-            placeholder={p.shot ? 'What about it?' : 'Ask anything, delegate a task, or continue…'}
+            placeholder={p.shot ? 'What about it?' : (p.placeholder ?? 'Ask anything, delegate a task, or continue…')}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -286,7 +323,6 @@ function Composer(p: Props) {
           >
             <Mic />
           </button>
-          {p.settings && p.settings.brain.provider !== 'claude' && <ThinkingRail settings={p.settings} onPick={p.onThink} />}
           <button className="round" onClick={() => p.onNarrate(NARRATION[p.narrate].next)} title={`${NARRATION[p.narrate].label}. Click to change.`} aria-label={NARRATION[p.narrate].label}>
             {NARRATION[p.narrate].icon}
           </button>
@@ -323,7 +359,7 @@ const host = (u: string) => {
  * that each fold open. Before any answer text arrives the live panel stays open so the work is
  * visible; it folds away as the answer starts.
  */
-function Trace({ turn }: { turn: Turn }) {
+export function Trace({ turn }: { turn: Turn }) {
   const api = window.bluevis
   const live = !!turn.pending && !turn.text
   const [chosen, setChosen] = useState<Panel | null | undefined>(undefined)
@@ -429,7 +465,7 @@ function Elapsed({ since }: { since: number }) {
   return <span className="elapsed">{Math.round((Date.now() - since) / 1000)}s</span>
 }
 
-function TurnView({ turn, latest, task, tasks, onOpenTask, relay, onOpenRelay }: { turn: Turn; latest: boolean; task?: AgentTask; tasks: Record<string, AgentTask>; onOpenTask: (id: string) => void; relay?: RelayRun; onOpenRelay: (id: string) => void }) {
+function TurnView({ turn, swarm, onShowTeam, latest, task, tasks, onOpenTask, relay, onOpenRelay }: { turn: Turn; swarm?: Swarm; onShowTeam: () => void; latest: boolean; task?: AgentTask; tasks: Record<string, AgentTask>; onOpenTask: (id: string) => void; relay?: RelayRun; onOpenRelay: (id: string) => void }) {
   const api = window.bluevis
   if (turn.speaker === 'user') {
     return (
@@ -509,6 +545,17 @@ function TurnView({ turn, latest, task, tasks, onOpenTask, relay, onOpenRelay }:
           </p>
           {rest.length > 0 && <Markdown className="detail" text={rest.join('\n\n')} />}
         </div>
+      )}
+      {swarm && !turn.model?.endsWith('verdict') && (
+        <button className="team-card" onClick={onShowTeam}>
+          {swarm.agents.map((a) => (
+            <span key={a.id} className="team-card-agent" style={{ ['--agent' as string]: a.color } as CSSProperties}>
+              <AgentDot agent={a} size={14} live={a.messages.some((m) => m.pending)} />
+              {a.name}
+            </span>
+          ))}
+          <span className="mono team-card-status">{swarm.status === 'running' ? (swarm.mode === 'debate' ? `round ${swarm.round} of ${swarm.rounds}` : 'working') : swarm.status}</span>
+        </button>
       )}
       {relay && <RelayInline run={relay} onOpen={() => onOpenRelay(relay.id)} />}
       {task && (

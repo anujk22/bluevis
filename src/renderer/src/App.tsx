@@ -16,6 +16,7 @@ import { Relays } from './views/Relays'
 import { History } from './views/History'
 import type { TerminalInfo } from '../../core/terminal'
 import type { RelayRun } from '../../core/relay'
+import type { Swarm } from '../../core/swarm'
 import { BASE_HUE, DEFAULT_ACCENT, type Accent } from '../../core/color'
 import { formatLeft, hackStatus, type Hackathon } from '../../core/hackathon'
 
@@ -63,6 +64,7 @@ function cue(freq: number) {
 export function App() {
   const api = window.bluevis
   const [turns, setTurns] = useState<Turn[]>([])
+  const [swarms, setSwarms] = useState<Record<string, Swarm>>({})
   const [tasks, setTasks] = useState<Record<string, AgentTask>>({})
   const [busy, setBusy] = useState(false)
   const [ctx, setCtx] = useState<Ctx>({})
@@ -135,7 +137,8 @@ export function App() {
           return next
         })
       ),
-      api.on('reset', () => setTurns([])),
+      api.on('reset', () => (setTurns([]), setSwarms({}))),
+      api.on('swarm', (s) => setSwarms((prev) => ({ ...prev, [(s as Swarm).id]: s as Swarm }))),
       api.on('hackathons', (l) => setHacks(l as Hackathon[])),
       api.on('relay', (r) => setRelays((prev) => ({ ...prev, [(r as RelayRun).id]: r as RelayRun }))),
       api.on('busy', (b) => setBusy(b as boolean)),
@@ -436,10 +439,14 @@ export function App() {
             }}
             onOpenChat={async (id) => {
               speaker.stop()
+              setSwarms({})
               setTurns((await api.chat.open(id)) as Turn[])
+              const list = (await api.swarm.list()) as Swarm[]
+              setSwarms(Object.fromEntries(list.map((s) => [s.id, s])))
             }}
             onNewChat={() => void api.chat.reset()}
             settings={settings}
+            swarms={Object.values(swarms)}
             onThink={async (level) => settings && setSettings((await api.settings.set(levelPatch(settings, level))) as Settings)}
             onOpenRelay={(id) => {
               setFocusRelay(id)

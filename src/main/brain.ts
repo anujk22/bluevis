@@ -6,7 +6,7 @@ import { parseReply, speakable, SpeechStream, type MemoryWrite } from '../core/r
 import { matchProject, needsMemory, route, type Intent } from '../core/router'
 import type { RelayRun } from '../core/relay'
 import type { AgentTask, ModelChoice, Project, Settings, Turn, TurnAction } from '../core/types'
-import { PERSONA, RESUME_PROMPT, SESSION_PROMPT } from './persona'
+import { PERSONA, RESUME_PROMPT, SESSION_PROMPT, ULTRA } from './persona'
 import { agendaText } from './calendar'
 import { canvasBrief } from './canvas'
 import type { TerminalManager } from './terminals'
@@ -20,6 +20,8 @@ import { run } from './shell'
 import type { RelayManager } from './relay'
 import type { TaskManager } from './tasks'
 import { ChatStore } from './chats'
+import { SwarmManager } from './swarm'
+import type { Swarm } from '../core/swarm'
 import { webFetch, webSearch } from './search'
 import { findApp, installedApps, openApp, placeApp, quitApp, typeText, type Region } from './mac'
 import type { Vault } from './vault'
@@ -33,6 +35,7 @@ export interface BrainEvents {
   speakChunk: (turnId: string, sentence: string) => void
   stopSpeech: () => void
   context: (c: { activeProject?: string; brain: ModelChoice }) => void
+  swarm: (s: Swarm) => void
   /** Bring the window forward (research started by voice while it was hidden). */
   show?: () => void
   settings: (s: Settings) => void
@@ -59,6 +62,7 @@ const BRAIN_DEFAULTS: Record<ModelChoice['provider'], ModelChoice> = {
 export class Brain {
   turns: Turn[] = []
   chats = new ChatStore()
+  swarms: SwarmManager
   private chatId: string = randomUUID()
   private saveTimer: NodeJS.Timeout | null = null
   private sessions: Partial<Record<ModelChoice['provider'], string>> = {}
@@ -75,6 +79,14 @@ export class Brain {
     private ev: BrainEvents
   ) {
     mkdirSync(this.workspace, { recursive: true })
+    this.swarms = new SwarmManager(
+      this.workspace,
+      (s) => {
+        this.ev.swarm(s)
+        if (s.chatId === this.chatId) this.persist()
+      },
+      (s) => void this.moderate(s)
+    )
   }
 
   private push(t: Omit<Turn, 'id' | 'at'> & Partial<Pick<Turn, 'id' | 'at'>>): Turn {
@@ -97,7 +109,7 @@ export class Brain {
     if (!this.saveTimer) return
     clearTimeout(this.saveTimer)
     this.saveTimer = null
-    this.chats.save(this.chatId, this.turns, this.sessions)
+    this.chats.save(this.chatId, this.turns, this.sessions, this.swarms.forChat(this.chatId))
   }
 
   /** Save the chat shortly after it changes; streaming updates coalesce into one write. */
@@ -105,8 +117,17 @@ export class Brain {
     if (this.saveTimer) return
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null
-      this.chats.save(this.chatId, this.turns, this.sessions)
+      this.chats.save(this.chatId, this.turns, this.sessions, this.swarms.forChat(this.chatId))
     }, 800)
+  }
+
+  /** A reply or a team is in progress. */
+  get busy() {
+    return !!this.current || this.swarms.running()
+  }
+
+  get currentChat() {
+    return this.chatId
   }
 
   /** Reopen a saved chat; continuing it resumes the same Codex/Claude sessions. */
@@ -118,6 +139,8 @@ export class Brain {
     this.chatId = c.id
     this.turns = c.turns
     this.sessions = c.sessions ?? {}
+    this.swarms.load(c.swarms ?? [])
+    for (const sw of c.swarms ?? []) this.ev.swarm(structuredClone(sw))
     return this.turns
   }
 
@@ -170,6 +193,8 @@ export class Brain {
         return this.chat(intent.text, opts.screenshot, this.terminalBlock(intent.text))
       case 'delegate':
         return this.delegate({ kind: 'delegate', agent: intent.agent, model: intent.model, project: intent.project, prompt: intent.prompt, state: 'proposed' }, projects, true)
+      case 'swarm':
+        return this.launchSwarm(intent.goal, intent.count)
       case 'research':
         this.ev.show?.()
         return this.research(intent.query)
@@ -262,7 +287,7 @@ export class Brain {
         prompt,
         cwd,
         role: 'brain',
-        system: PERSONA,
+        system: s.ultra ? PERSONA + ULTRA : PERSONA,
         images: o.images,
         sessionId: o.fresh ? undefined : this.sessions[choice.provider],
         history: choice.provider === 'local' && !o.fresh ? history : undefined,
@@ -346,6 +371,7 @@ export class Brain {
       turn.pending = false
       this.update(turn)
       speech.finish(full ? speakable(reply.shown) : reply.spoken)
+      for (const sw of s.ultra ? reply.swarms.slice(0, 1) : []) void this.launchSwarm(sw.goal, sw.count)
       for (const a of reply.actions) this.push({ speaker: 'system', text: '', action: { kind: 'delegate', agent: a.agent, project: a.project, prompt: a.prompt, state: 'proposed' } })
       for (const m of reply.memories) await this.remember(m, 'inferred from conversation', false, true)
     } catch (e) {
@@ -707,6 +733,69 @@ Reply with only JSON: {"actions":[...],"say":"one short sentence confirming what
       if (cleaned.trim()) text = cleaned.trim().replace(/^"|"$/g, '')
     }
     await typeText(text)
+  }
+
+  /** Launch a team of parallel agents from the main chat, which stays the main chat. */
+  async launchSwarm(goal: string, count?: number) {
+    this.ev.show?.()
+    const turn = this.push({ speaker: 'bluevis', text: '', pending: true, status: 'Putting a team together' })
+    try {
+      const s = await this.swarms.start(this.chatId, goal, count)
+      const names = s.agents.map((a) => a.name)
+      turn.swarmId = s.id
+      turn.pending = false
+      delete turn.status
+      turn.text = `${names.slice(0, -1).join(', ')} and ${names.at(-1)} are on it. ${s.mode === 'debate' ? `They will debate over ${s.rounds} rounds, then I will give you the verdict.` : 'Each takes a part; I will pull it together when they finish.'}`
+      turn.spoken = turn.text
+      this.update(turn)
+      this.ev.speak(turn.id, turn.text)
+    } catch (e) {
+      turn.pending = false
+      turn.error = true
+      turn.text = (e as Error).message
+      this.update(turn)
+    }
+  }
+
+  /** The main chat's verdict once a team finishes: agreement, disagreement, and a call. */
+  private async moderate(s: Swarm) {
+    if (s.chatId !== this.chatId) return
+    const transcript = s.agents
+      .map((a) => `## ${a.name} (${a.persona})\n${a.messages.filter((m) => m.from === 'agent' && !m.error && m.text).map((m) => `${m.round ? `Round ${m.round}` : 'Reply'}: ${m.text}`).join('\n\n')}`)
+      .join('\n\n')
+    const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: `${label(getSettings().brain)} · verdict`, swarmId: s.id })
+    this.ev.busy(true)
+    const speech = new SpeechStream((sentence) => this.ev.speakChunk(turn.id, sentence), 3, getSettings().voice.narrate === 'full')
+    try {
+      const raw = await this.think(
+        `Your team just finished working on: "${s.goal}" (${s.mode}).
+
+${transcript}
+
+Give Anuj the verdict. Start with two or three spoken sentences: the bottom line. Then '---' and in at most 200 words of markdown: where they agreed, where they split and why, and your own call with reasons. Name the agents. No em dashes.`,
+        {
+          effort: 'medium',
+          onThinking: (t) => ((turn.thinking = (turn.thinking ?? '') + t), this.update(turn)),
+          onText: (partial) => {
+            if (turn.thinking && turn.thoughtMs === undefined) turn.thoughtMs = Date.now() - turn.at
+            turn.text = parseReply(partial).shown
+            this.update(turn)
+            speech.feed(partial)
+          }
+        }
+      )
+      const reply = parseReply(raw)
+      turn.text = reply.shown || '(no verdict)'
+      turn.spoken = reply.spoken
+      speech.finish(reply.spoken)
+    } catch (e) {
+      turn.error = true
+      turn.text = `The verdict failed: ${(e as Error).message}`
+    } finally {
+      turn.pending = false
+      this.update(turn)
+      this.ev.busy(false)
+    }
   }
 
   private lastBriefAt = 0

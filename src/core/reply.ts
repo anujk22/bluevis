@@ -20,13 +20,16 @@ export interface ParsedReply {
   shown: string
   actions: ProposedAction[]
   memories: MemoryWrite[]
+  /** Ultra: the model asked for a team of parallel agents. */
+  swarms: { goal: string; count?: number }[]
 }
 
-const DIRECTIVE = /^\s*(ACTION|MEMORY):\s*(\{.*\})\s*$/
+const DIRECTIVE = /^\s*(ACTION|MEMORY|SWARM):\s*(\{.*\})\s*$/
 
 export function parseReply(raw: string): ParsedReply {
   const actions: ProposedAction[] = []
   const memories: MemoryWrite[] = []
+  const swarms: ParsedReply['swarms'] = []
   const kept: string[] = []
   for (const line of raw.split('\n')) {
     const m = line.match(DIRECTIVE)
@@ -38,6 +41,8 @@ export function parseReply(raw: string): ParsedReply {
       const obj = JSON.parse(m[2])
       if (m[1] === 'ACTION' && obj.type === 'delegate' && typeof obj.prompt === 'string') {
         actions.push({ type: 'delegate', agent: obj.agent === 'claude' ? 'claude' : 'codex', project: obj.project || undefined, prompt: obj.prompt })
+      } else if (m[1] === 'SWARM' && typeof obj.goal === 'string') {
+        swarms.push({ goal: obj.goal, count: Number(obj.count) || undefined })
       } else if (m[1] === 'MEMORY' && typeof obj.text === 'string' && typeof obj.title === 'string') {
         const kinds = ['preference', 'decision', 'idea', 'fact', 'project']
         memories.push({ kind: kinds.includes(obj.kind) ? obj.kind : 'fact', title: obj.title, text: obj.text, project: obj.project || undefined })
@@ -52,7 +57,7 @@ export function parseReply(raw: string): ParsedReply {
   const parts = shown.split(/\n\s*---\s*\n/)
   // Without one, a short reply is read whole and a long one by its opening.
   const spoken = parts.length > 1 ? parts[0].trim() : speakable(shown).split(' ').length <= 60 ? shown.split('```')[0] : firstSentences(shown, 3)
-  return { spoken: speakable(spoken), shown: shown.replace(/\n\s*---\s*\n/, '\n\n'), actions, memories }
+  return { spoken: speakable(spoken), shown: shown.replace(/\n\s*---\s*\n/, '\n\n'), actions, memories, swarms }
 }
 
 function firstSentences(text: string, n: number): string {

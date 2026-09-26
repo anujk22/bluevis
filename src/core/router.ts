@@ -22,6 +22,8 @@ export type Intent =
   | { type: 'agenda'; text: string }
   | { type: 'research'; query: string }
   | { type: 'web-search'; query: string }
+  /** A team of parallel agents (Ultra). */
+  | { type: 'swarm'; goal: string; count?: number }
   /** Something to do on the Mac: open or quit apps, arrange windows. */
   | { type: 'mac'; text: string }
 
@@ -112,6 +114,11 @@ export function route(raw: string, projects: string[] = []): Intent {
     return { type: 'remember', text: body, kind: 'fact', private: priv }
   }
 
+  const team = text.match(/^(?:please\s+)?(?:launch|spawn|start|spin up|create|get|use)\s+(?:a\s+team\s+of\s+)?(\d+|two|three|four|five|six|a few|some)?\s*(?:parallel\s+)?(?:sub-?agents?|agents?)\b[\s,:]*(?:to|that|who|which|and|for)?\s*(.+)$/i)
+  if (team) {
+    const n = { two: 2, three: 3, four: 4, five: 5, six: 6 }[team[1]?.toLowerCase() as 'two'] ?? (Number(team[1]) || undefined)
+    return { type: 'swarm', goal: team[2].trim(), count: n ? Math.min(6, Math.max(2, n)) : undefined }
+  }
   const research = text.match(/^(?:please\s+)?(?:(?:deep\s+)?research|look into|dig into)\s*[:,]?\s+(.+)$/i)
   if (research) return { type: 'research', query: research[1].trim() }
   const web = text.match(/^(?:search|google|look up)\s*(?:the web|google|online)?\s*[:,]?\s*(?:for\s+)?(.+)$/i)

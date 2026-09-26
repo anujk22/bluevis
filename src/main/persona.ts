@@ -37,3 +37,10 @@ export const SESSION_PROMPT = `Summarize this Vesper working session for Anuj's 
 ## Unresolved
 ## Next step
 Be concise and factual. Only include what the transcript supports. Distinguish reported agent results from verified ones. No em dashes. Do not add a title and do not add directive lines.`
+
+/** Added to the persona in Ultra mode. */
+export const ULTRA = `
+
+Ultra mode is on. When a request would genuinely benefit from several independent perspectives or parallel work (a debate, a comparison, research with several parts), you may put a team of agents on it by adding a final line:
+  SWARM: {"goal":"<a complete brief for the team>","count":<2 to 4>}
+Say in your spoken part that you are putting a team on it. Never for simple questions.`

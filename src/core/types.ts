@@ -114,6 +114,8 @@ export interface Turn {
   /** What the model thought before answering, shown folded under the reply. */
   thinking?: string
   thoughtMs?: number
+  /** A team of parallel agents this turn launched or summarized. */
+  swarmId?: string
   /** Web pages a research answer drew on, in citation order. */
   web?: { title: string; url: string }[]
   /** Tool calls made while answering (e.g. Gmail searches), shown so answers are not a black box. */
