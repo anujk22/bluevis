@@ -69,6 +69,45 @@ function setMode(m: Mode, focus = true) {
   if (focus && m === 'expanded') win.focus()
 }
 
+let overlay: BrowserWindow | null = null
+/**
+ * The listening pill: a tiny always-on-top window at the bottom of the screen the pointer is on.
+ * It never takes focus (dictation types into whatever app has it) and ignores the mouse.
+ */
+function setOverlay(p: { state: string; text?: string; startedAt?: number }) {
+  if (p.state === 'hidden') {
+    overlay?.webContents.send('overlay', p)
+    setTimeout(() => overlay?.hide(), 300)
+    return
+  }
+  if (!overlay || overlay.isDestroyed()) {
+    overlay = new BrowserWindow({
+      width: 600,
+      height: 64,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      focusable: false,
+      skipTaskbar: true,
+      hasShadow: false,
+      show: false,
+      webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, backgroundThrottling: false }
+    })
+    overlay.setIgnoreMouseEvents(true)
+    overlay.setAlwaysOnTop(true, 'screen-saver')
+    overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    if (process.env.ELECTRON_RENDERER_URL) void overlay.loadURL(`${process.env.ELECTRON_RENDERER_URL}/overlay.html`)
+    else void overlay.loadFile(join(__dirname, '../renderer/overlay.html'))
+  }
+  const wa = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea
+  overlay.setBounds({ x: Math.round(wa.x + (wa.width - 600) / 2), y: wa.y + wa.height - 64 - 20, width: 600, height: 64 })
+  const o = overlay
+  if (o.webContents.isLoading()) o.webContents.once('did-finish-load', () => o.webContents.send('overlay', p))
+  else o.webContents.send('overlay', p)
+  o.showInactive()
+}
+
 let dictationKey: string | null = null
 /** The dictation shortcut is configurable; rebinding releases the old one. It never shows the window, so focus stays where the text goes. */
 function bindDictation() {
@@ -230,6 +269,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('swarm:list', () => brain.swarms.forChat(brain.currentChat))
   ipcMain.handle('swarm:ask', (_e, swarmId: string, agentId: string, text: string) => brain.swarms.ask(swarmId, agentId, text))
   ipcMain.handle('swarm:stop', (_e, swarmId: string) => brain.swarms.stop(swarmId))
+  ipcMain.on('overlay', (_e, p: { state: string; text?: string; startedAt?: number }) => setOverlay(p))
+  ipcMain.on('overlay:level', (_e, level: number) => overlay?.webContents.send('overlay:level', level))
   ipcMain.handle('dictate:type', (_e, text: string) => brain.dictate(text))
   ipcMain.handle('chat:open', (_e, id: string) => brain.openChat(id))
   ipcMain.handle('chat:context', () => ({ ...brain.context(), brainLabel: label(brain.context().brain) }))

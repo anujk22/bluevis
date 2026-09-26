@@ -109,6 +109,8 @@ export interface Turn {
   /** Vault passages the model was given for this reply. */
   sources?: SourceRef[]
   relayId?: string
+  /** Generation speed: live while streaming, exact once the model reports its token count. */
+  tps?: number
   /** A short live status while nothing else is visible yet (e.g. loading the local model). */
   status?: string
   /** What the model thought before answering, shown folded under the reply. */

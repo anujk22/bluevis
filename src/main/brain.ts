@@ -58,6 +58,25 @@ const BRAIN_DEFAULTS: Record<ModelChoice['provider'], ModelChoice> = {
   local: { provider: 'local', model: '', effort: 'low' }
 }
 
+/** Tokens per second for a streaming reply: estimated per delta while it streams, exact from the final usage report. */
+function meter(turn: Turn) {
+  let first = 0
+  let n = 0
+  return {
+    tick() {
+      const now = Date.now()
+      if (!first) first = now
+      n++
+      const secs = (now - first) / 1000
+      if (secs > 0.5 && n % 6 === 0) turn.tps = Math.round(n / secs)
+    },
+    done(output?: number) {
+      const secs = (Date.now() - first) / 1000
+      if (first && secs > 0.2) turn.tps = Math.round((output ?? n) / secs)
+    }
+  }
+}
+
 /** Owns the conversation: routes intents, builds scoped context, runs the brain, and applies its directives. */
 export class Brain {
   turns: Turn[] = []
@@ -270,7 +289,7 @@ export class Brain {
   }
 
   /** Run one brain turn and resolve with the final text (or throw). */
-  private runBrain(prompt: string, o: { images?: string[]; fresh?: boolean; onDelta?: (text: string) => void; onThinking?: (text: string) => void; onProgress?: (label: string) => void } = {}): Promise<string> {
+  private runBrain(prompt: string, o: { images?: string[]; fresh?: boolean; onDelta?: (text: string) => void; onThinking?: (text: string) => void; onProgress?: (label: string) => void; onUsage?: (output: number) => void } = {}): Promise<string> {
     const s = getSettings()
     const choice = s.brain
     const cwd = this.activeProject?.path ?? this.workspace
@@ -300,6 +319,7 @@ export class Brain {
           }
           if (e.kind === 'thinking-delta') o.onThinking?.(e.text)
           if (e.kind === 'progress') o.onProgress?.(e.label)
+          if (e.kind === 'usage') o.onUsage?.(e.output)
           if (e.kind === 'reasoning') o.onThinking?.(`${e.text}\n\n`)
           if (e.kind === 'message') text = text ? `${text}\n\n${e.text}` : e.text
           if (e.kind === 'error') failed = e.message
@@ -347,10 +367,14 @@ export class Brain {
     this.ev.busy(true)
     const full = s.voice.narrate === 'full'
     const speech = new SpeechStream((sentence) => this.ev.speakChunk(turn.id, sentence), 3, full)
+    const speed = meter(turn)
+    let output: number | undefined
     try {
       const raw = await this.runBrain(prompt, {
         images: screenshot ? [screenshot] : undefined,
+        onUsage: (n) => (output = n),
         onThinking: (t) => {
+          speed.tick()
           turn.thinking = (turn.thinking ?? '') + t
           this.update(turn)
         },
@@ -359,6 +383,7 @@ export class Brain {
           this.update(turn)
         },
         onDelta: (partial) => {
+          speed.tick()
           if (turn.thinking && turn.thoughtMs === undefined) turn.thoughtMs = Date.now() - turn.at
           turn.text = parseReply(partial).shown
           this.update(turn)
@@ -366,6 +391,7 @@ export class Brain {
         }
       })
       const reply = parseReply(raw)
+      speed.done(output)
       turn.text = reply.shown || '(no reply)'
       turn.spoken = reply.spoken
       turn.pending = false
@@ -548,7 +574,7 @@ Constraints:
   }
 
   /** One model call outside the conversation, streaming its thinking and text. */
-  private think(prompt: string, o: { effort?: ModelChoice['effort'] | 'none'; onThinking?: (t: string) => void; onText?: (t: string) => void; onProgress?: (label: string) => void } = {}): Promise<string> {
+  private think(prompt: string, o: { effort?: ModelChoice['effort'] | 'none'; onThinking?: (t: string) => void; onText?: (t: string) => void; onProgress?: (label: string) => void; onUsage?: (output: number) => void } = {}): Promise<string> {
     const s = getSettings()
     const { effort: _, ...base } = s.brain
     const effort = o.effort ?? s.brain.effort
@@ -567,6 +593,7 @@ Constraints:
         onEvent: (e) => {
           if (e.kind === 'thinking-delta') o.onThinking?.(e.text)
           if (e.kind === 'progress') o.onProgress?.(e.label)
+          if (e.kind === 'usage') o.onUsage?.(e.output)
           if (e.kind === 'text-delta') o.onText?.((streamed += e.text))
           if (e.kind === 'message') text = e.text
           if (e.kind === 'error') failed = e.message
@@ -640,6 +667,8 @@ Constraints:
       const narrate = getSettings().voice.narrate
       const speech = new SpeechStream((sentence) => this.ev.speakChunk(turn.id, sentence), 3, narrate === 'full')
       turn.thinking = (turn.thinking ?? '') + '\n\n'
+      const speed = meter(turn)
+      let output: number | undefined
       const answer = await this.think(
         `Today is ${now}. Question: ${question}
 
@@ -650,8 +679,10 @@ ${sources}
 </sources>`,
         {
           effort: 'low',
-          onThinking,
+          onUsage: (n) => (output = n),
+          onThinking: (t) => (speed.tick(), onThinking(t)),
           onText: (partial) => {
+            speed.tick()
             if (turn.thinking && turn.thoughtMs === undefined) turn.thoughtMs = Date.now() - turn.at
             turn.text = parseReply(partial).shown
             this.update(turn)
@@ -660,6 +691,7 @@ ${sources}
         }
       )
       const reply = parseReply(answer)
+      speed.done(output)
       turn.text = reply.shown || '(no answer)'
       turn.spoken = reply.spoken
       turn.pending = false

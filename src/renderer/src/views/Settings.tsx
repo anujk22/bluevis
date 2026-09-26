@@ -444,7 +444,7 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
           <div className="field">
             <label>Hey Vesper</label>
             <div className="ctrl">
-              <button className="switch" role="switch" aria-checked={!!settings.wake} aria-label="Listen for Hey Vesper" onClick={() => save({ wake: !settings.wake })} />
+              <button className="switch" role="switch" aria-checked={settings.wake !== false} aria-label="Listen for Hey Vesper" onClick={() => save({ wake: settings.wake === false })} />
               <span className="mono" style={{ color: 'var(--mist)' }}>
                 Always listening, on this Mac only. Say “Vesper, transcribe…”, “open…”, “search…” or “research…”
               </span>

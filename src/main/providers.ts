@@ -148,7 +148,7 @@ async function streamSSE(body: ReadableStream<Uint8Array>, parse: (line: string)
           text += ev.text
           o.onEvent(ev)
         }
-        if (ev.kind === 'thinking-delta') o.onEvent(ev)
+        if (ev.kind === 'thinking-delta' || ev.kind === 'usage') o.onEvent(ev)
       }
     }
   }
@@ -175,7 +175,7 @@ function runLocal(o: RunOptions): RunHandle {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Qwen thinks by default, which delays the first spoken word by seconds; conversation turns it off unless an effort is chosen.
-        body: JSON.stringify({ model: o.choice.model, messages, stream: true, reasoning_effort: o.choice.effort ?? 'none' }),
+        body: JSON.stringify({ model: o.choice.model, messages, stream: true, stream_options: { include_usage: true }, reasoning_effort: o.choice.effort ?? 'none' }),
         signal: controller.signal
       })
       if (!res.ok || !res.body) throw new Error(`Local model returned ${res.status}`)

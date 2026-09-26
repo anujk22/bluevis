@@ -57,6 +57,7 @@ describe('openai sse parser', () => {
   it('parses deltas and done', () => {
     expect(parseOpenAISSELine('data: {"choices":[{"delta":{"content":"Hi"}}]}')).toEqual([{ kind: 'text-delta', text: 'Hi' }])
     expect(parseOpenAISSELine('data: [DONE]')).toEqual([{ kind: 'done' }])
+    expect(parseOpenAISSELine('data: {"choices":[],"usage":{"prompt_tokens":40,"completion_tokens":312}}')).toEqual([{ kind: 'usage', input: 40, output: 312 }])
     expect(parseOpenAISSELine(': keepalive')).toEqual([])
   })
 })

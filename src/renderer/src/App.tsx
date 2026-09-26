@@ -200,7 +200,7 @@ export function App() {
 
   /** Record one utterance and transcribe it locally. Null when nothing usable was said. */
   const capture = useCallback(
-    async (opts: { silence?: number; maxSeconds?: number } = {}): Promise<string | null> => {
+    async (opts: { silence?: number; maxSeconds?: number } = {}, pill?: 'listening' | 'dictating'): Promise<string | null> => {
       if (voiceRef.current.state !== 'ready') {
         setNotice(voiceRef.current.state === 'starting' ? 'Voice is still loading. Type for now, or try again in a moment.' : `Voice is unavailable: ${voiceRef.current.detail || 'turn it on in Settings'}.`)
         return null
@@ -209,21 +209,41 @@ export function App() {
       const l = new Listener()
       listener.current = l
       setListening(true)
+      // Voice started from anywhere (wake word, dictation shortcut) shows the pill with live bars and a timer.
+      let pump: number | undefined
+      if (pill) {
+        api.overlay.set({ state: pill, startedAt: Date.now() })
+        pump = window.setInterval(() => api.overlay.level(l.level), 50)
+      }
       const res = await l.listen(opts)
+      clearInterval(pump)
       listener.current = null
       setListening(false)
       if ('cancelled' in res) {
+        if (pill) api.overlay.set({ state: 'hidden' })
         if (res.reason === 'error') setNotice(res.message ?? 'Microphone unavailable')
         return null
       }
+      if (pill) api.overlay.set({ state: 'transcribing' })
       try {
-        return ((await api.voice.stt(res.wav)) as string).trim() || null
+        const text = ((await api.voice.stt(res.wav)) as string).trim() || null
+        if (pill && !text) api.overlay.set({ state: 'hidden' })
+        return text
       } catch (e) {
+        if (pill) api.overlay.set({ state: 'hidden' })
         setNotice(`Transcription failed: ${(e as Error).message}`)
         return null
       }
     },
     [api, speaker]
+  )
+  /** Show what was heard in the pill for a moment, then tuck it away. */
+  const heard = useCallback(
+    (text: string) => {
+      api.overlay.set({ state: 'heard', text })
+      window.setTimeout(() => api.overlay.set({ state: 'hidden' }), 1800)
+    },
+    [api]
   )
 
   const toggleListen = useCallback(async () => {
@@ -237,12 +257,13 @@ export function App() {
     async (said?: string) => {
       if (!said && listener.current) return listener.current.stop()
       if (!said) cue(880)
-      const text = said ?? (await capture({ silence: 2, maxSeconds: 180 }))
+      const text = said ?? (await capture({ silence: 2, maxSeconds: 180 }, 'dictating'))
       if (!text) return
       cue(660)
+      heard(text)
       await api.chat.dictate(text).catch((e: Error) => setNotice(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
     },
-    [api, capture]
+    [api, capture, heard]
   )
   const dictateRef = useRef(dictate)
   dictateRef.current = dictate
@@ -251,19 +272,21 @@ export function App() {
   const onWake = useCallback(
     async (command: string) => {
       cue(880)
-      const said = command || (await capture())
+      const said = command || (await capture({}, 'listening'))
       if (!said) return
       const t = said.match(/^(?:transcribe|dictate|type(?: this)?)\b[\s:,.-]*(.*)$/is)
       if (t) return dictate(t[1].trim() || undefined)
+      heard(said)
       await sendRef.current(said, 'voice')
     },
-    [capture, dictate]
+    [capture, dictate, heard]
   )
   const onWakeRef = useRef(onWake)
   onWakeRef.current = onWake
   const wake = useRef<WakeListener | null>(null)
   useEffect(() => {
-    const want = !!settings?.wake && voice.state === 'ready'
+    // On by default for as long as Vesper runs; Settings can turn it off.
+    const want = !!settings && settings.wake !== false && voice.state === 'ready'
     if (want && !wake.current) {
       const w = new WakeListener(
         async (wav) => (await api.voice.stt(wav)) as string,

@@ -470,11 +470,11 @@ function TurnView({ turn, swarm, onShowTeam, latest, task, tasks, onOpenTask, re
   if (turn.speaker === 'user') {
     return (
       <div className="turn turn-user">
-        <div className="turn-meta eyebrow">
-          <span className="who">You{turn.via === 'voice' ? ' · voice' : ''}</span>
-          <span>{time(turn.at)}</span>
-        </div>
         <div className="body">{turn.text}</div>
+        <div className="turn-meta mono">
+          {turn.via === 'voice' ? 'said · ' : ''}
+          {time(turn.at)}
+        </div>
       </div>
     )
   }
@@ -519,6 +519,7 @@ function TurnView({ turn, swarm, onShowTeam, latest, task, tasks, onOpenTask, re
       <div className="turn-meta eyebrow">
         <span className="who">Vesper{turn.model ? ` · ${turn.model}` : ''}</span>
         <span>{time(turn.at)}</span>
+        {!!turn.tps && <span className="tps">{turn.tps} tok/s</span>}
         {turn.evidence && (
           <span className="evidence" data-kind={turn.evidence}>
             {turn.evidence}
