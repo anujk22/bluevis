@@ -41,7 +41,7 @@ function userText(s: string): string {
   return (i >= 0 ? s.slice(i + 14) : s).trim()
 }
 
-/** Metadata from a Codex session's first line, or null for threads that are not the user's own (subagents, Bluevis runs). */
+/** Metadata from a Codex session's first line, or null for threads that are not the user's own (subagents, Vesper runs). */
 export function codexMeta(firstLine: string): { id: string; cwd: string; at: number } | null {
   try {
     const p = JSON.parse(firstLine)?.payload

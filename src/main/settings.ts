@@ -8,8 +8,8 @@ const file = () => join(app.getPath('userData'), 'settings.json')
 
 function defaultVault(): string {
   if (process.env.BLUEVIS_PROFILE_DIR) return join(app.getPath('userData'), 'vault')
-  // In development the vault lives beside the app (gitignored); packaged builds use ~/Bluevis Vault.
-  return app.isPackaged ? join(homedir(), 'Bluevis Vault') : join(app.getAppPath(), 'vault')
+  // In development the vault lives beside the app (gitignored); packaged builds use ~/Vesper Vault.
+  return app.isPackaged ? join(homedir(), 'Vesper Vault') : join(app.getAppPath(), 'vault')
 }
 
 export function defaults(): Settings {

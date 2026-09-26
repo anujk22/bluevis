@@ -64,7 +64,7 @@ export function Agents({
     <div className="split agents">
       <aside className="panel">
         <h2 className="panel-title">Work</h2>
-        <p className="panel-sub">Terminals and agents, side by side. Ask Bluevis about the terminal you are looking at and it can read it.</p>
+        <p className="panel-sub">Terminals and agents, side by side. Ask Vesper about the terminal you are looking at and it can read it.</p>
         <div className="eyebrow side-head">Terminals</div>
         <NewTerminal onOpen={(t) => onTermFocus(t.id)} />
         {terms.map((t) => (
@@ -264,7 +264,7 @@ function TaskDetail({ task, onTakeOver }: { task: AgentTask; onTakeOver: (t: Age
           {task.finalMessage && (
             <div className="report">
               <div className="eyebrow" style={{ marginBottom: 10 }}>
-                Agent report · reported, not verified by Bluevis
+                Agent report · reported, not verified by Vesper
               </div>
               <Markdown text={task.finalMessage} />
             </div>

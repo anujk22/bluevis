@@ -5,7 +5,7 @@ import { getSettings } from './settings'
 
 export const DEFAULT_CANVAS = 'https://rutgers.instructure.com'
 
-// Schools can block personal tokens; then Anuj signs in once in a Bluevis window and reads use that session,
+// Schools can block personal tokens; then Anuj signs in once in a Vesper window and reads use that session,
 // exactly as the Canvas website does. The session lives in its own partition, separate from everything else.
 const canvasSession = () => session.fromPartition('persist:canvas')
 

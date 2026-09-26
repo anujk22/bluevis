@@ -5,8 +5,8 @@ import { codexMeta, fallbackTitle, parseClaudeThread, parseCodexThread, type His
 
 const CODEX = join(homedir(), '.codex')
 const CLAUDE = join(homedir(), '.claude', 'projects')
-// Claude Code folders that hold Bluevis's own runs or throwaway scratch sessions, not the user's work.
-const CLAUDE_SKIP = /Application-Support-Bluevis|Application-Support-Claude-scratch|^-private-tmp/
+// Claude Code folders that hold Vesper's own runs or throwaway scratch sessions, not the user's work.
+const CLAUDE_SKIP = /Application-Support-(?:Vesper|Bluevis)|Application-Support-Claude-scratch|^-private-tmp/
 
 function head(path: string, bytes: number, fromEnd = false): string {
   const size = statSync(path).size

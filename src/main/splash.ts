@@ -5,7 +5,7 @@ import { getSettings } from './settings'
 
 let child: ChildProcess | null = null
 
-/** Start the Splash server when conversation uses a Splash model and nothing answers at the local URL yet. It stops when Bluevis quits. */
+/** Start the Splash server when conversation uses a Splash model and nothing answers at the local URL yet. It stops when Vesper quits. */
 export async function ensureSplash() {
   const { brain, localBaseUrl } = getSettings()
   if (child || brain.provider !== 'local' || !brain.model.endsWith('-Splash')) return

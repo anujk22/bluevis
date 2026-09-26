@@ -201,7 +201,7 @@ export function AttentionMenu({ turns, tasks, relays, extra = [], onGo }: { turn
 export function AccountMenu({ onSettings }: { onSettings: () => void }) {
   const api = window.bluevis
   return (
-    <Popover label="Bluevis menu" button={() => <span className="avatar">A</span>}>
+    <Popover label="Vesper menu" button={() => <span className="avatar">A</span>}>
       {(close) => (
         <div className="menu">
           {(
@@ -209,7 +209,7 @@ export function AccountMenu({ onSettings }: { onSettings: () => void }) {
               ['Settings', onSettings],
               ['Shrink to orb   ⌥Space', () => api.window.setMode('compact')],
               ['Hide', () => api.window.hide()],
-              ['Quit Bluevis   ⌘Q', () => api.window.quit()]
+              ['Quit Vesper   ⌘Q', () => api.window.quit()]
             ] as [string, () => void][]
           ).map(([l, fn]) => (
             <button

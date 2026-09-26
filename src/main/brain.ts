@@ -434,7 +434,7 @@ Anuj: ${text}`
   private terminalBlock(text: string, within?: string): string {
     const t = asksAboutTerminal(text) ? this.terminals?.focusedTail() : null
     if (!t || (within && !t.cwd.startsWith(within))) return ''
-    return `\n\n<terminal title="${t.title}" cwd="${t.cwd}" note="recent output of the terminal Anuj is looking at in Bluevis; credentials masked">\n${t.text}\n</terminal>`
+    return `\n\n<terminal title="${t.title}" cwd="${t.cwd}" note="recent output of the terminal Anuj is looking at in Vesper; credentials masked">\n${t.text}\n</terminal>`
   }
 
   /** Start (or ask about) a delegated agent task. */
@@ -472,7 +472,7 @@ Anuj: ${text}`
     const { text: knowledge } = await this.vault.context(objective, { allowPrivate: choice.provider === 'local', project: project.name, maxChars: 5000 })
     return `${objective}
 
-<handoff from="Bluevis">
+<handoff from="Vesper">
 Project: ${project.name} (${project.path}, branch ${project.branch ?? 'unknown'})
 Relevant knowledge (status "needs-review" means unconfirmed background):
 ${knowledge || '(none)'}
@@ -802,7 +802,7 @@ ${note}
     const convo = this.turns.filter((t) => (t.speaker === 'user' || t.speaker === 'bluevis') && t.text && !t.error)
     const runs = this.tasks.list()
     if (convo.length < 3 && !runs.length) return this.say('Nothing worth recording this session. See you later.')
-    const transcript = convo.map((t) => `${t.speaker === 'user' ? 'Anuj' : 'Bluevis'}: ${t.text.slice(0, 1200)}`).join('\n')
+    const transcript = convo.map((t) => `${t.speaker === 'user' ? 'Anuj' : 'Vesper'}: ${t.text.slice(0, 1200)}`).join('\n')
     const agentLog = runs
       .map((t) => `- ${label(t.choice)} on ${t.project ?? t.cwd}: ${t.status}; files: ${t.filesChanged.join(', ') || 'none'}; said: ${t.finalMessage?.slice(0, 400) ?? '(nothing)'}`)
       .join('\n')

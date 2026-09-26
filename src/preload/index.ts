@@ -65,4 +65,4 @@ const api = {
 
 contextBridge.exposeInMainWorld('bluevis', api)
 
-export type BluevisApi = typeof api
+export type VesperApi = typeof api

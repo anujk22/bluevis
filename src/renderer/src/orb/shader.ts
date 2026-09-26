@@ -1,4 +1,4 @@
-// The Bluevis orb: a drop of International Klein Blue ink suspended in glass.
+// The Vesper orb: a drop of International Klein Blue ink suspended in glass.
 // Interior is domain-warped noise lit as a volume; the edge deforms only with
 // real audio level; each running agent is a satellite on a tilted orbit.
 

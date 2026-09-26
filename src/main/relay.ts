@@ -74,7 +74,7 @@ export class RelayManager {
       status: 'running',
       startedAt: Date.now(),
       stages: [
-        stage('Read the page', 'Bluevis'),
+        stage('Read the page', 'Vesper'),
         stage('Ideate', 'Claude Opus · high', OPUS),
         stage('Challenge', 'GPT-6-Astra · high', ASTRA),
         stage('Consolidate', 'Claude Opus · high', OPUS)
@@ -131,7 +131,7 @@ export class RelayManager {
     const parts: string[] = []
     for (const u of urls) {
       try {
-        const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Bluevis' }, signal: AbortSignal.timeout(20000) })
+        const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh) Vesper' }, signal: AbortSignal.timeout(20000) })
         const text = r.ok ? htmlToText(await r.text(), 16000) : ''
         s.events.push({ at: Date.now(), label: `GET ${u.replace('https://', '')} · ${r.status}${text ? ` · ${text.length.toLocaleString()} chars` : ''}` })
         if (text) parts.push(`# Source: ${u}\n\n${text}`)

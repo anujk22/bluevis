@@ -5,7 +5,7 @@ import { terminalTail, type TerminalInfo } from '../core/terminal'
 
 const KEEP = 256 * 1024
 
-/** Real login-shell terminals. Output streams to the renderer and a tail is kept so Bluevis can read it. */
+/** Real login-shell terminals. Output streams to the renderer and a tail is kept so Vesper can read it. */
 export class TerminalManager {
   private terms = new Map<string, { info: TerminalInfo; pty: IPty; buffer: string }>()
   private focused: string | null = null
@@ -25,7 +25,7 @@ export class TerminalManager {
       cols: o.cols ?? 100,
       rows: o.rows ?? 30,
       cwd,
-      env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'Bluevis' } as Record<string, string>
+      env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'Vesper' } as Record<string, string>
     })
     const info: TerminalInfo = { id: randomUUID(), title: o.title ?? cwd.split('/').filter(Boolean).at(-1) ?? 'home', cwd, command: o.command, lastOutputAt: Date.now() }
     const t = { info, pty, buffer: '' }
@@ -58,7 +58,7 @@ export class TerminalManager {
   }
 
   write(id: string, data: string) {
-    // The terminal Bluevis reads is the one Anuj last typed in.
+    // The terminal Vesper reads is the one Anuj last typed in.
     this.focused = id
     this.terms.get(id)?.pty.write(data)
   }

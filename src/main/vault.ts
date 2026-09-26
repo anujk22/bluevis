@@ -32,11 +32,11 @@ export class Vault {
     }
     if (!existsSync(join(this.root, '.git'))) {
       await this.git(['init', '-q', '-b', 'main'])
-      await this.git(['config', 'user.name', 'Bluevis'])
+      await this.git(['config', 'user.name', 'Vesper'])
       await this.git(['config', 'user.email', 'bluevis@localhost'])
       writeFileSync(join(this.root, '.gitignore'), '.obsidian/workspace*.json\n.trash/\n')
     }
-    await this.commit(fresh ? 'Create vault' : 'Record edits made outside Bluevis')
+    await this.commit(fresh ? 'Create vault' : 'Record edits made outside Vesper')
   }
 
   private git(args: string[]) {
@@ -296,7 +296,7 @@ export class Vault {
       } else {
         mkdirSync(dirname(full), { recursive: true })
         const hint =
-          w.kind === 'idea' ? '\n\n> Exploratory. Not a commitment.' : w.kind === 'fact' ? '\n\n> Captured by Bluevis. Review and move to the right note.' : ''
+          w.kind === 'idea' ? '\n\n> Exploratory. Not a commitment.' : w.kind === 'fact' ? '\n\n> Captured by Vesper. Review and move to the right note.' : ''
         writeFileSync(full, serializeNote(data, `# ${w.title}${hint}\n\n${w.text}`))
       }
     }
@@ -322,7 +322,7 @@ export class Vault {
   async writeSession(title: string, markdown: string, project?: string): Promise<{ path: string; hash?: string }> {
     const date = today()
     const rel = `Sessions/${date} ${safeTitle(title)}.md`
-    const data: Frontmatter = { title: `${date} ${title}`, type: 'session', status: 'historical', source: 'Bluevis session', updated: date }
+    const data: Frontmatter = { title: `${date} ${title}`, type: 'session', status: 'historical', source: 'Vesper session', updated: date }
     if (project) data.project = `[[${project}]]`
     mkdirSync(join(this.root, 'Sessions'), { recursive: true })
     writeFileSync(this.safePath(rel), serializeNote(data, markdown))
@@ -338,7 +338,7 @@ export class Vault {
       type: 'agent-run',
       status: t.status,
       agent: `${t.choice.provider}/${t.choice.model}`,
-      source: 'Bluevis agent run (agent self-report plus observed commands)',
+      source: 'Vesper agent run (agent self-report plus observed commands)',
       updated: date
     }
     if (t.project) data.project = `[[${t.project}]]`
@@ -348,7 +348,7 @@ export class Vault {
       .map((s) => `- ${s.status === 'failed' ? '✗' : '✓'} ${s.kind === 'edit' ? 'edited' : 'ran'} \`${s.label.slice(0, 140)}\``)
     const body = [
       `# ${t.title}`,
-      `> Status observed by Bluevis: **${t.status}**. The summary below is the agent's own report.`,
+      `> Status observed by Vesper: **${t.status}**. The summary below is the agent's own report.`,
       `## Request\n${t.prompt.split('<handoff')[0].trim()}`,
       t.finalMessage && `## Agent report\n${t.finalMessage}`,
       t.filesChanged.length && `## Files changed\n${t.filesChanged.map((f) => `- \`${f}\``).join('\n')}`,

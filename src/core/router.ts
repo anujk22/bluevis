@@ -35,7 +35,7 @@ const AGENT_WORDS: Record<string, { agent: AgentName; model?: string }> = {
   sonnet: { agent: 'claude', model: 'sonnet' }
 }
 
-const WAKE = /^(?:(?:hey|ok|okay|yo)\s+)?bluevis[,.!:]?\s*/i
+const WAKE = /^(?:(?:hey|hay|ok|okay|yo)\s+)?(?:vesper|bluevis)[,.!:]?\s*/i
 
 export function stripWake(text: string): string {
   return text.replace(WAKE, '').trim()

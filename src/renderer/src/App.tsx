@@ -283,15 +283,15 @@ export function App() {
   // Satellites count every live worker: agents and relays.
   const running = taskList.filter((t) => ACTIVE.has(t.status))
   const workers = running.length + relaysRunning
-  const lastBluevis = [...turns].reverse().find((t) => t.speaker === 'bluevis')
+  const lastVesper = [...turns].reverse().find((t) => t.speaker === 'bluevis')
   const pendingProposal = turns.some((t) => t.action?.state === 'proposed')
   const [errorFresh, setErrorFresh] = useState(false)
   useEffect(() => {
-    if (!lastBluevis?.error) return setErrorFresh(false)
+    if (!lastVesper?.error) return setErrorFresh(false)
     setErrorFresh(true)
     const id = setTimeout(() => setErrorFresh(false), 4000)
     return () => clearTimeout(id)
-  }, [lastBluevis?.id, lastBluevis?.error])
+  }, [lastVesper?.id, lastVesper?.error])
 
   const orbMode: OrbMode = listening
     ? 'listening'
@@ -317,7 +317,7 @@ export function App() {
   if (winMode === 'compact') {
     return (
       <div className="compact">
-        <button className="stage-orb" onClick={() => api.window.setMode('expanded')} aria-label="Open Bluevis">
+        <button className="stage-orb" onClick={() => api.window.setMode('expanded')} aria-label="Open Vesper">
           <Orb mode={orbMode} level={level} moons={Math.min(workers, 4)} size={176} radius={0.6} accent={accent} heartbeat={hack ? urgency : undefined} />
         </button>
         {orbMode !== 'idle' && <span className="compact-dot mono">{caption(orbMode, workers)}</span>}
@@ -339,7 +339,7 @@ export function App() {
     <div className="shell" data-empty={empty}>
       <header className="header glass">
         <div className="header-left">
-          <div className="wordmark">bluevis</div>
+          <div className="wordmark">vesper</div>
           <UsageChips usage={usage} onOpen={() => setView('settings')} />
         </div>
         <nav className="nav" aria-label="Sections">

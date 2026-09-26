@@ -512,7 +512,7 @@ button.chip:hover {
   border: 1px solid var(--line-2);
 }
 
-/* Bluevis speaks in serif. The latest line is set large; history recedes. */
+/* Vesper speaks in serif. The latest line is set large; history recedes. */
 .spoken {
   font-family: var(--serif);
   font-size: 22px;

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, session, shell, systemPreferences, Tray } from 'electron'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ModelChoice, Settings } from '../core/types'
 import { Brain, label } from './brain'
@@ -25,6 +25,17 @@ type Mode = 'compact' | 'expanded'
 
 // Isolated profile (settings + vault) for tests and experiments; never touches the real vault.
 if (process.env.BLUEVIS_PROFILE_DIR) app.setPath('userData', process.env.BLUEVIS_PROFILE_DIR)
+// The app was called Bluevis; its own data (settings, chats, sign-ins) moves to the new name once.
+// Electron creates the new folder before this runs, so items move one by one; browser caches stay behind.
+else {
+  const legacy = join(app.getPath('appData'), 'Bluevis')
+  const current = app.getPath('userData')
+  if (existsSync(join(legacy, 'settings.json')) && !existsSync(join(current, 'settings.json'))) {
+    mkdirSync(current, { recursive: true })
+    for (const f of readdirSync(legacy))
+      if (/\.json$|^(chats|workspace|Hackathons|Partitions)$/.test(f) && !existsSync(join(current, f))) renameSync(join(legacy, f), join(current, f))
+  }
+}
 
 let win: BrowserWindow | null = null
 let mode: Mode = 'expanded'
@@ -93,7 +104,7 @@ function createWindow() {
   else void win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-/** Capture the main display without Bluevis in the shot. Returns the file path and a preview data URL. */
+/** Capture the main display without Vesper in the shot. Returns the file path and a preview data URL. */
 async function captureScreen(): Promise<{ path: string; preview: string } | { error: string }> {
   const path = join(app.getPath('temp'), `bluevis-screen-${Date.now()}.jpg`)
   const wasVisible = win?.isVisible()
@@ -103,21 +114,21 @@ async function captureScreen(): Promise<{ path: string; preview: string } | { er
   win?.setOpacity(1)
   if (wasVisible === false) win?.hide()
   if (r.code !== 0 || !existsSync(path)) {
-    return { error: 'Screen capture failed. Allow Bluevis under System Settings → Privacy & Security → Screen Recording.' }
+    return { error: 'Screen capture failed. Allow Vesper under System Settings → Privacy & Security → Screen Recording.' }
   }
   const preview = `data:image/jpeg;base64,${readFileSync(path).toString('base64')}`
   return { path, preview }
 }
 
-/** Menu bar presence: always there, so Bluevis can be found, summoned and quit. */
+/** Menu bar presence: always there, so Vesper can be found, summoned and quit. */
 function createTray(openVault: () => void) {
   const icon = nativeImage.createFromPath(join(app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'), 'trayTemplate.png'))
   icon.setTemplateImage(true)
   tray = new Tray(icon)
-  tray.setToolTip('Bluevis')
+  tray.setToolTip('Vesper')
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Show Bluevis', accelerator: 'Alt+Space', click: () => setMode('expanded') },
+      { label: 'Show Vesper', accelerator: 'Alt+Space', click: () => setMode('expanded') },
       { label: 'Talk', accelerator: 'Alt+Shift+Space', click: () => (setMode('expanded'), send('hotkey:talk')) },
       { label: 'Shrink to orb', click: () => setMode('compact', false) },
       { label: 'Hide', click: () => win?.hide() },
@@ -125,7 +136,7 @@ function createTray(openVault: () => void) {
       { label: 'Open vault', click: openVault },
       { label: 'Launch at login', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin, enabled: app.isPackaged, click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }) },
       { type: 'separator' },
-      { label: 'Quit Bluevis', accelerator: 'Cmd+Q', click: () => app.quit() }
+      { label: 'Quit Vesper', accelerator: 'Cmd+Q', click: () => app.quit() }
     ])
   )
 }
@@ -334,7 +345,7 @@ app.whenReady().then(async () => {
   createWindow()
   createTray(() => void shell.openPath(vault.root))
 
-  // ⌥Space summons or tucks away Bluevis. ⌥⇧Space talks. ⌥⇧L looks at the screen, then asks.
+  // ⌥Space summons or tucks away Vesper. ⌥⇧Space talks. ⌥⇧L looks at the screen, then asks.
   globalShortcut.register('Alt+Space', () => {
     if (!win) return
     if (!win.isVisible()) setMode('expanded')
@@ -365,5 +376,5 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => app.quit())
-// Clicking the Dock icon brings Bluevis back if it was hidden.
+// Clicking the Dock icon brings Vesper back if it was hidden.
 app.on('activate', () => setMode('expanded'))

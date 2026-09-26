@@ -107,7 +107,7 @@ function greeting(): string {
 
 const SUGGESTIONS = [
   { text: 'What do you know about me?', icon: <Person /> },
-  { text: 'Where did I leave off?', send: 'Where did I leave off on Bluevis?', icon: <Clock /> },
+  { text: 'Where did I leave off?', icon: <Clock /> },
   { text: 'Brief me', send: 'Brief me', icon: <Bars /> },
   { text: 'Explain this screen', look: true, icon: <Book /> }
 ]
@@ -163,7 +163,7 @@ export function Talk(p: Props) {
         {now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · {now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
       </div>
       <div className="stage">
-        <div onClick={p.onOrb} role="button" tabIndex={-1} aria-label="Talk to Bluevis" style={{ pointerEvents: 'auto', cursor: 'pointer', borderRadius: '50%' }}>
+        <div onClick={p.onOrb} role="button" tabIndex={-1} aria-label="Talk to Vesper" style={{ pointerEvents: 'auto', cursor: 'pointer', borderRadius: '50%' }}>
           {p.orb}
         </div>
         <div className="stage-caption eyebrow" aria-live="polite">
@@ -272,7 +272,7 @@ function Composer(p: Props) {
               }
               if (e.key === 'Escape') p.onStop()
             }}
-            aria-label="Message Bluevis"
+            aria-label="Message Vesper"
           />
           <button
             className="round"
@@ -393,7 +393,7 @@ function TurnView({ turn, latest, task, tasks, onOpenTask, relay, onOpenRelay }:
   return (
     <div className={`turn ${latest ? 'turn-latest' : ''} ${turn.error ? 'turn-error' : ''}`}>
       <div className="turn-meta eyebrow">
-        <span className="who">Bluevis{turn.model ? ` · ${turn.model}` : ''}</span>
+        <span className="who">Vesper{turn.model ? ` · ${turn.model}` : ''}</span>
         <span>{time(turn.at)}</span>
         {turn.evidence && (
           <span className="evidence" data-kind={turn.evidence}>

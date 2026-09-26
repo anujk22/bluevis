@@ -120,7 +120,7 @@ export function Memory({ searchFocus = 0 }: { searchFocus?: number }) {
           <>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 20 }}>
               <div style={{ flex: 1 }}>
-                <h2 className="panel-title">What Bluevis knows</h2>
+                <h2 className="panel-title">What Vesper knows</h2>
                 <p className="panel-sub" style={{ margin: 0 }}>
                   {total} notes · {review} awaiting your review · plain Markdown in your vault
                 </p>
@@ -144,7 +144,7 @@ export function Memory({ searchFocus = 0 }: { searchFocus?: number }) {
             {hits && (
               <div className="hits">
                 <div className="eyebrow">
-                  {hits.length ? `What Bluevis would retrieve for “${query}”` : 'Nothing relevant found'}
+                  {hits.length ? `What Vesper would retrieve for “${query}”` : 'Nothing relevant found'}
                 </div>
                 {hits.map((h) => (
                   <button key={h.id} className="hit" onClick={() => setOpen(atlas?.notes.find((n) => n.path === h.path) ?? null)}>

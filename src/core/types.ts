@@ -32,7 +32,7 @@ export type AgentEvent =
 
 /**
  * Honest task states. "completed-unverified" means the agent reported success
- * but Bluevis saw no passing check; "completed-verified" requires an observed
+ * but Vesper saw no passing check; "completed-verified" requires an observed
  * successful test/build command after the last file edit.
  */
 export type TaskStatus =
@@ -196,9 +196,9 @@ export interface Settings {
   accent?: Accent
   /** Canvas base URL; the access token lives in the keychain. */
   canvasUrl?: string
-  /** Signed in to Canvas in Bluevis (for schools that block personal tokens). */
+  /** Signed in to Canvas in Vesper (for schools that block personal tokens). */
   canvasSignedIn?: boolean
-  /** Speak the daily brief the first time Bluevis opens each morning. */
+  /** Speak the daily brief the first time Vesper opens each morning. */
   morningBrief?: boolean
 }
 

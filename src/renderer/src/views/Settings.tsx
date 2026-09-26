@@ -510,7 +510,7 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
 
         <div className="section">
           <h3>Canvas</h3>
-          <p>Assignments with whether you submitted them, grades and announcements. Read-only. You sign in yourself in a Canvas window; Bluevis keeps that session separate from everything else.</p>
+          <p>Assignments with whether you submitted them, grades and announcements. Read-only. You sign in yourself in a Canvas window; Vesper keeps that session separate from everything else.</p>
           <Canvas settings={settings} save={save} />
         </div>
 
@@ -549,7 +549,7 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
           <h3>Shortcuts</h3>
           <div className="keys" style={{ marginTop: 12 }}>
             <kbd>⌥ Space</kbd>
-            <span>Summon Bluevis, or shrink it to the orb</span>
+            <span>Summon Vesper, or shrink it to the orb</span>
             <kbd>⌥ ⇧ Space</kbd>
             <span>Talk (ends on silence; press again to stop)</span>
             <kbd>⌥ ⇧ L</kbd>
@@ -560,7 +560,7 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
         </div>
 
         <div className="section" style={{ borderBottom: 0 }}>
-          <h3>What Bluevis can see</h3>
+          <h3>What Vesper can see</h3>
           <p>
             The screen only when you press ⌥⇧L or the eye. The microphone only while listening. Repos in the folders above, read on demand. Your Internship
             folder is not scanned. Email, calendar and ChatGPT history are not connected.

@@ -152,7 +152,7 @@ function Pipeline({ run, hacks, onFocus }: { run: RelayRun; hacks: Hackathon[]; 
               <button
                 className="btn btn-primary"
                 disabled={starting}
-                title="Pulls the deadline, checkpoints and judging criteria out of the plan, and turns Bluevis red until you submit"
+                title="Pulls the deadline, checkpoints and judging criteria out of the plan, and turns Vesper red until you submit"
                 onClick={async () => {
                   setStarting(true)
                   setError(null)

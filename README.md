@@ -1,4 +1,4 @@
-# Bluevis
+# Vesper
 
 A personal AI operating layer for macOS. A living orb of Klein-blue ink that listens, speaks with a local British voice, coordinates Codex and Claude as coding agents, and keeps what matters in an Obsidian-compatible vault you own.
 

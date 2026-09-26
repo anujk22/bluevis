@@ -8,7 +8,7 @@ import { ago } from '../components/Usage'
 const LIVE = new Set(['starting', 'investigating', 'editing', 'testing', 'awaiting-approval'])
 const PAGE = 200
 
-/** Past Codex and Claude Code threads, readable and continuable without leaving Bluevis. */
+/** Past Codex and Claude Code threads, readable and continuable without leaving Vesper. */
 type OpenTerminal = (provider: 'codex' | 'claude', id: string, cwd: string, title: string) => void
 
 export function History({ tasks, onOpenTerminal }: { tasks: AgentTask[]; onOpenTerminal: OpenTerminal }) {
@@ -195,7 +195,7 @@ function Thread({ thread, tasks, onChanged, onOpenTerminal }: { thread: ThreadSu
           Send
         </button>
       </div>
-      <p className="thread-note">Runs in {folder(thread.cwd)} with edits allowed, like a Bluevis agent. It also appears under Agents.</p>
+      <p className="thread-note">Runs in {folder(thread.cwd)} with edits allowed, like a Vesper agent. It also appears under Agents.</p>
     </div>
   )
 }
