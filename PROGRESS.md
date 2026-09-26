@@ -94,6 +94,9 @@ Nothing loads the whole vault. Per turn Bluevis sends: `Profile/Core.md` (~1.3k 
 - [x] "In your own words" dump → proposals through the same pipeline (voice input for it still to do)
 - [x] Review queue for imported proposals
 - [ ] Review flow for the seeded `needs-review` notes (confirm / correct in place)
+- [x] Chat history: every Talk conversation saves to `chats/<id>.json` (debounced, flushed on switch); Recent menu and New chat above the transcript, recent pills on the empty screen; reopening a chat continues it (local history, Codex/Claude session ids). A reply stopped by switching chats never lands in the next one
+- [x] Narration modes (composer speaker button cycles Brief, Full, Mute; also in Settings): brief reads short replies whole (60 words or less) and the opening of long ones; full reads everything including detail
+- [x] Header model menu shows only the models picked in Settings (`pickerModels`); thinking gear beside it; Qwen defaults to low thinking
 - [ ] Control tower (next): watch every Codex and Claude Code session (Claude Code hooks + Codex `notify`, session files as fallback); flag waiting-for-you, repeated failures, stalls and two sessions editing one file; local model writes one-line summaries and decides whether to interrupt; per-project "where was I" notes feeding the brief
 - [ ] Menu bar presence and launch at login
 - [ ] Active-app context (frontmost app + window title) with explicit permission

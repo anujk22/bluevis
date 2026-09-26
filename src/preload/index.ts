@@ -11,6 +11,8 @@ const api = {
     stop: invoke('chat:stop'),
     reset: invoke('chat:reset'),
     turns: invoke('chat:turns'),
+    list: invoke('chat:list'),
+    open: invoke('chat:open'),
     context: invoke('chat:context')
   },
   actions: { approve: invoke('action:approve'), dismiss: invoke('action:dismiss') },

@@ -200,9 +200,11 @@ describe('reply parsing', () => {
     expect(r.memories[0]).toMatchObject({ kind: 'decision', title: 'Price validation' })
   })
 
-  it('speaks only the first sentences without a separator and never code', () => {
-    const r = parseReply('One. Two. Three. Four.\n\n```js\nx()\n```')
-    expect(r.spoken).toBe('One. Two. Three.')
+  it('reads a short reply whole, a long one by its opening, and never code', () => {
+    const r = parseReply('One. Two.\n\nThree. Four.\n\n```js\nx()\n```')
+    expect(r.spoken).toBe('One. Two. Three. Four.')
+    const long = parseReply(`One. Two. Three. Four.\n\n${'word '.repeat(70)}.`)
+    expect(long.spoken).toBe('One. Two. Three.')
     expect(speakable('Run `npm test` and see [docs](http://x)')).toBe('Run npm test and see docs')
   })
 
@@ -262,6 +264,15 @@ describe('speech stream', () => {
     t.feed('Done.\nMEMORY: {"kind":"fact"}\n')
     t.finish('Done.')
     expect(out).toEqual(['Done.'])
+  })
+
+  it('reads everything, separator and all, in full narration', () => {
+    const out: string[] = []
+    const s = new SpeechStream((x) => out.push(x), 3, true)
+    s.feed('One. Two. Three. Four.\n---\n- Detail. More')
+    expect(out).toEqual(['One.', 'Two.', 'Three.', 'Four.', 'Detail.'])
+    s.finish(speakable('One. Two. Three. Four.\n\n- Detail. More'))
+    expect(out.at(-1)).toBe('More')
   })
 })
 

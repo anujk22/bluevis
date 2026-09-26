@@ -75,6 +75,16 @@ export interface AgentTask {
 
 export type Speaker = 'user' | 'bluevis' | 'system'
 
+export type Narration = 'brief' | 'full' | 'mute'
+
+/** A saved Talk conversation, as listed in Recent chats. */
+export interface ChatSummary {
+  id: string
+  title: string
+  at: number
+  count: number
+}
+
 export interface Turn {
   id: string
   speaker: Speaker
@@ -162,7 +172,10 @@ export interface Settings {
   brain: ModelChoice
   worker: ModelChoice
   localBaseUrl: string
-  voice: { enabled: boolean; ttsVoice: string; speed: number; speak: boolean }
+  /** narrate: brief reads short replies whole and the lead of long ones; full reads everything; mute reads nothing. */
+  voice: { enabled: boolean; ttsVoice: string; speed: number; narrate: Narration }
+  /** Models offered in the header menu, as "provider:model". Unset means all. */
+  pickerModels?: string[]
   projectRoots: string[]
   vaultPath: string
   editor: string

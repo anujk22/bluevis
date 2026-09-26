@@ -352,6 +352,17 @@ export function App() {
             }}
             onOpenTask={openTask}
             relays={relays}
+            narrate={settings?.voice.narrate ?? 'brief'}
+            onNarrate={async (narrate) => {
+              if (!settings) return
+              if (narrate === 'mute') speaker.stop()
+              setSettings((await api.settings.set({ voice: { ...settings.voice, narrate } })) as Settings)
+            }}
+            onOpenChat={async (id) => {
+              speaker.stop()
+              setTurns((await api.chat.open(id)) as Turn[])
+            }}
+            onNewChat={() => void api.chat.reset()}
             onOpenRelay={(id) => {
               setFocusRelay(id)
               setView('relays')

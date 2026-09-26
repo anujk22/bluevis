@@ -4,7 +4,7 @@ import type { RelayRun } from '../../../core/relay'
 import { Bell, Chevron, Gear } from './icons'
 import { until, type UsageState } from './Usage'
 
-function Popover({ button, children, align = 'right', label }: { button: (open: boolean) => ReactNode; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; label: string }) {
+export function Popover({ button, children, align = 'right', label }: { button: (open: boolean) => ReactNode; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; label: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -32,8 +32,9 @@ function Popover({ button, children, align = 'right', label }: { button: (open: 
   )
 }
 
-const MODELS: { label: string; choice: ModelChoice; note: string }[] = [
-  { label: 'Qwen 3.6 (local)', choice: { provider: 'local', model: 'incoai/Qwen3.6-35B-A3B-Splash' }, note: 'Splash · fastest, private' },
+/** Everything the header menu can offer; Settings picks which of these show. */
+export const MODELS: { label: string; choice: ModelChoice; note: string }[] = [
+  { label: 'Qwen 3.6 (local)', choice: { provider: 'local', model: 'incoai/Qwen3.6-35B-A3B-Splash', effort: 'low' }, note: 'Splash · private, thinks briefly' },
   { label: 'GPT-6-Luna', choice: { provider: 'codex', model: 'gpt-6-luna', effort: 'low' }, note: 'Codex · fast' },
   { label: 'GPT-6-Sol', choice: { provider: 'codex', model: 'gpt-6-sol', effort: 'low' }, note: 'Codex · balanced' },
   { label: 'GPT-6-Astra', choice: { provider: 'codex', model: 'gpt-6-astra', effort: 'medium' }, note: 'Codex · deepest' },
@@ -41,6 +42,8 @@ const MODELS: { label: string; choice: ModelChoice; note: string }[] = [
   { label: 'Claude Sonnet', choice: { provider: 'claude', model: 'sonnet' }, note: 'Claude · balanced' },
   { label: 'Claude Opus', choice: { provider: 'claude', model: 'opus' }, note: 'Claude · deepest' }
 ]
+
+export const modelKey = (c: ModelChoice) => `${c.provider}:${c.model}`
 
 /** Conversation model switcher, with how much of each subscription is left. */
 export function ModelMenu({ settings, label, usage, onChange }: { settings: Settings | null; label?: string; usage: UsageState; onChange: (s: Settings) => void }) {
@@ -59,7 +62,7 @@ export function ModelMenu({ settings, label, usage, onChange }: { settings: Sett
       {(close) => (
         <div className="menu">
           <div className="eyebrow menu-head">Conversation model</div>
-          {MODELS.map((m) => (
+          {MODELS.filter((m) => !settings?.pickerModels || settings.pickerModels.includes(modelKey(m.choice)) || (cur?.provider === m.choice.provider && cur?.model === m.choice.model)).map((m) => (
             <button
               key={m.label}
               className="menu-item"

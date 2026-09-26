@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { parseReply, SpeechStream, type MemoryWrite } from '../core/reply'
+import { parseReply, speakable, SpeechStream, type MemoryWrite } from '../core/reply'
 import { matchProject, needsMemory, route, type Intent } from '../core/router'
 import type { RelayRun } from '../core/relay'
 import type { AgentTask, ModelChoice, Project, Settings, Turn, TurnAction } from '../core/types'
@@ -19,6 +19,7 @@ import { getSettings, updateSettings } from './settings'
 import { run } from './shell'
 import type { RelayManager } from './relay'
 import type { TaskManager } from './tasks'
+import { ChatStore } from './chats'
 import type { Vault } from './vault'
 
 export interface BrainEvents {
@@ -47,12 +48,15 @@ const IDENTITY = "You're talking with Anuj Kakumanu, a Rutgers CS sophomore and 
 const BRAIN_DEFAULTS: Record<ModelChoice['provider'], ModelChoice> = {
   codex: { provider: 'codex', model: 'gpt-6-luna', effort: 'low' },
   claude: { provider: 'claude', model: 'haiku' },
-  local: { provider: 'local', model: '' }
+  local: { provider: 'local', model: '', effort: 'low' }
 }
 
 /** Owns the conversation: routes intents, builds scoped context, runs the brain, and applies its directives. */
 export class Brain {
   turns: Turn[] = []
+  chats = new ChatStore()
+  private chatId: string = randomUUID()
+  private saveTimer: NodeJS.Timeout | null = null
   private sessions: Partial<Record<ModelChoice['provider'], string>> = {}
   private current: RunHandle | null = null
   private activeProject?: Project
@@ -73,11 +77,44 @@ export class Brain {
     const turn: Turn = { id: randomUUID(), at: Date.now(), ...t }
     this.turns.push(turn)
     this.ev.turn(turn)
+    this.persist()
     return turn
   }
 
   private update(turn: Turn) {
+    // A reply stopped by switching chats must not land in the next one.
+    if (!this.turns.includes(turn)) return
     this.ev.turn({ ...turn })
+    this.persist()
+  }
+
+  /** Write any pending save now, before the conversation changes. */
+  private flush() {
+    if (!this.saveTimer) return
+    clearTimeout(this.saveTimer)
+    this.saveTimer = null
+    this.chats.save(this.chatId, this.turns, this.sessions)
+  }
+
+  /** Save the chat shortly after it changes; streaming updates coalesce into one write. */
+  private persist() {
+    if (this.saveTimer) return
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null
+      this.chats.save(this.chatId, this.turns, this.sessions)
+    }, 800)
+  }
+
+  /** Reopen a saved chat; continuing it resumes the same Codex/Claude sessions. */
+  openChat(id: string): Turn[] {
+    const c = this.chats.load(id)
+    this.stop()
+    this.flush()
+    this.ev.stopSpeech()
+    this.chatId = c.id
+    this.turns = c.turns
+    this.sessions = c.sessions ?? {}
+    return this.turns
   }
 
   private say(text: string, extra: Partial<Turn> = {}, speak = true): Turn {
@@ -158,7 +195,7 @@ export class Brain {
         if (intent.provider === 'local') {
           const models = await localModels(getSettings().localBaseUrl)
           if (!models.length) return this.say(`The local model server isn't answering at ${getSettings().localBaseUrl}. Staying on ${label(getSettings().brain)}.`)
-          choice = { provider: 'local', model: models[0] }
+          choice = { provider: 'local', model: models[0], effort: 'low' }
         }
         this.ev.settings(updateSettings({ brain: choice }))
         this.ev.context(this.context())
@@ -183,8 +220,10 @@ export class Brain {
 
   reset() {
     this.stop()
+    this.flush()
     this.turns = []
     this.sessions = {}
+    this.chatId = randomUUID()
     this.ev.reset()
   }
 
@@ -262,7 +301,8 @@ export class Brain {
 
     const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: label(choice), sources: used })
     this.ev.busy(true)
-    const speech = new SpeechStream((sentence) => this.ev.speakChunk(turn.id, sentence))
+    const full = s.voice.narrate === 'full'
+    const speech = new SpeechStream((sentence) => this.ev.speakChunk(turn.id, sentence), 3, full)
     try {
       const raw = await this.runBrain(prompt, {
         images: screenshot ? [screenshot] : undefined,
@@ -277,7 +317,7 @@ export class Brain {
       turn.spoken = reply.spoken
       turn.pending = false
       this.update(turn)
-      speech.finish(reply.spoken)
+      speech.finish(full ? speakable(reply.shown) : reply.spoken)
       for (const a of reply.actions) this.push({ speaker: 'system', text: '', action: { kind: 'delegate', agent: a.agent, project: a.project, prompt: a.prompt, state: 'proposed' } })
       for (const m of reply.memories) await this.remember(m, 'inferred from conversation', false, true)
     } catch (e) {

@@ -49,7 +49,8 @@ export function parseReply(raw: string): ParsedReply {
   const shown = kept.join('\n').replace(/\n{3,}/g, '\n\n').trim()
   // Everything before a lone '---' is spoken; the rest is detail for the screen.
   const parts = shown.split(/\n\s*---\s*\n/)
-  const spoken = parts.length > 1 ? parts[0].trim() : firstSentences(shown, 3)
+  // Without one, a short reply is read whole and a long one by its opening.
+  const spoken = parts.length > 1 ? parts[0].trim() : speakable(shown).split(' ').length <= 60 ? shown.split('```')[0] : firstSentences(shown, 3)
   return { spoken: speakable(spoken), shown: shown.replace(/\n\s*---\s*\n/, '\n\n'), actions, memories }
 }
 
@@ -98,7 +99,9 @@ export class SpeechStream {
 
   constructor(
     private emit: (sentence: string) => void,
-    private max = 3
+    private max = 3,
+    /** Full narration: read everything, including the detail after the separator. */
+    private full = false
   ) {}
 
   private sentences(raw: string): { list: string[]; closed: boolean } {
@@ -106,6 +109,7 @@ export class SpeechStream {
       .split('\n')
       .filter((l) => !/^\s*(ACTION|MEMORY):/.test(l))
       .join('\n')
+    if (this.full) return { list: splitSentences(speakable(text.replace(/\n\s*---\s*(\n|$)/g, '\n'))), closed: false }
     const sep = text.search(/\n\s*---\s*(\n|$)/)
     const region = sep >= 0 ? text.slice(0, sep) : text.split(/\n\s*\n/)[0].split('```')[0]
     return { list: splitSentences(speakable(region)), closed: sep >= 0 }
@@ -114,7 +118,7 @@ export class SpeechStream {
   /** Feed the full partial text so far. */
   feed(partial: string) {
     const { list, closed } = this.sentences(partial)
-    const cap = closed ? list.length : this.max
+    const cap = closed || this.full ? list.length : this.max
     // The last sentence may still be growing unless the spoken part is closed.
     const ready = closed ? list : list.slice(0, -1)
     while (this.emitted < Math.min(ready.length, cap)) this.emit(ready[this.emitted++])

@@ -137,8 +137,8 @@ app.whenReady().then(async () => {
     turn: (t) => send('turn', t),
     reset: () => send('reset'),
     busy: (b) => send('busy', b),
-    speak: (id, text) => getSettings().voice.speak && send('speak', id, text),
-    speakChunk: (id, text) => getSettings().voice.speak && send('speak-chunk', id, text),
+    speak: (id, text) => getSettings().voice.narrate !== 'mute' && send('speak', id, text),
+    speakChunk: (id, text) => getSettings().voice.narrate !== 'mute' && send('speak-chunk', id, text),
     stopSpeech: () => send('speech:stop'),
     context: (c) => send('context', { ...c, brainLabel: label(c.brain) }),
     settings: (s) => send('settings', s)
@@ -194,6 +194,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('chat:stop', () => brain.stop())
   ipcMain.handle('chat:reset', () => brain.reset())
   ipcMain.handle('chat:turns', () => brain.turns)
+  ipcMain.handle('chat:list', () => brain.chats.list())
+  ipcMain.handle('chat:open', (_e, id: string) => brain.openChat(id))
   ipcMain.handle('chat:context', () => ({ ...brain.context(), brainLabel: label(brain.context().brain) }))
   ipcMain.handle('action:approve', (_e, id: string, project?: string, prompt?: string) => brain.approveAction(id, project, prompt))
   ipcMain.handle('action:dismiss', (_e, id: string) => brain.dismissAction(id))
@@ -256,6 +258,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
     const s = updateSettings(patch)
     send('context', { ...brain.context(), brainLabel: label(s.brain) })
+    if (patch.voice?.narrate === 'mute') send('speech:stop')
     if (patch.brain) void ensureSplash()
     return s
   })

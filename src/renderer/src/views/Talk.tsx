@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import type { AgentTask, Turn, VoiceHealth } from '../../../core/types'
+import type { AgentTask, ChatSummary, Narration, Turn, VoiceHealth } from '../../../core/types'
 import type { Shot } from '../App'
-import { Arrow, ArrowRight, Bars, Book, Clip, Clock, Eye, Mic, Person, Square } from '../components/icons'
+import { Arrow, ArrowRight, Bars, Book, Clip, Clock, Eye, Mic, Person, Plus, SpeakerBrief, SpeakerFull, SpeakerMute, Square } from '../components/icons'
+import { Popover } from '../components/HeaderMenus'
 import { Inline, Markdown } from '../components/Markdown'
 import { TaskStatus } from '../components/TaskStatus'
 import { RelayInline } from './Relays'
@@ -26,6 +27,77 @@ interface Props {
   onOpenTask: (id: string) => void
   relays: Record<string, RelayRun>
   onOpenRelay: (id: string) => void
+  narrate: Narration
+  onNarrate: (n: Narration) => void
+  onOpenChat: (id: string) => void
+  onNewChat: () => void
+}
+
+const NARRATION: Record<Narration, { next: Narration; label: string; icon: ReactNode }> = {
+  brief: { next: 'full', label: 'Narration: brief', icon: <SpeakerBrief /> },
+  full: { next: 'mute', label: 'Narration: full', icon: <SpeakerFull /> },
+  mute: { next: 'brief', label: 'Narration: muted', icon: <SpeakerMute /> }
+}
+
+function ago(at: number): string {
+  const m = Math.round((Date.now() - at) / 60000)
+  if (m < 60) return m < 1 ? 'just now' : `${m}m ago`
+  const h = Math.round(m / 60)
+  return h < 24 ? `${h}h ago` : new Date(at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/** Saved chats, newest first. Refreshed whenever the list is shown. */
+function useChats(deps: unknown[]): ChatSummary[] {
+  const [chats, setChats] = useState<ChatSummary[]>([])
+  useEffect(() => {
+    void window.bluevis.chat.list().then((c) => setChats(c as ChatSummary[]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+  return chats
+}
+
+function RecentList({ chats, onOpen }: { chats: ChatSummary[]; onOpen: (id: string) => void }) {
+  return (
+    <>
+      {chats.map((c) => (
+        <button key={c.id} className="menu-item recent-item" onClick={() => onOpen(c.id)}>
+          <span className="recent-title">{c.title}</span>
+          <span className="mono menu-note">{ago(c.at)}</span>
+        </button>
+      ))}
+    </>
+  )
+}
+
+function RecentMenu({ onOpen }: { onOpen: (id: string) => void }) {
+  const chats = useChats([])
+  return (
+    <div className="menu recent-menu">
+      <div className="eyebrow menu-head">Recent chats</div>
+      {chats.length ? <RecentList chats={chats.slice(0, 30)} onOpen={onOpen} /> : <span className="mono menu-note" style={{ padding: 10 }}>No saved chats yet.</span>}
+    </div>
+  )
+}
+
+function ChatBar(p: Props) {
+  return (
+    <div className="chat-bar">
+      <Popover
+        label="Recent chats"
+        align="left"
+        button={() => (
+          <span className="chat-bar-btn">
+            <Clock /> Recent
+          </span>
+        )}
+      >
+        {(close) => <RecentMenu onOpen={(id) => (p.onOpenChat(id), close())} />}
+      </Popover>
+      <button className="chat-bar-btn" onClick={p.onNewChat}>
+        <Plus /> New chat
+      </button>
+    </div>
+  )
 }
 
 function greeting(): string {
@@ -117,10 +189,12 @@ export function Talk(p: Props) {
           ))}
         </div>
         {empty && composer}
+        {empty && <RecentStrip onOpen={p.onOpenChat} />}
         {empty && <div className="footnote eyebrow">⌥⇧Space to talk · ⌥⇧L to look · ⌥Space to hide</div>}
       </div>
 
       <section className="conversation" aria-label="Conversation">
+        {!empty && <ChatBar {...p} />}
         <div className="transcript" ref={scroller} role="log">
           {p.turns.map((t) => (
             <TurnView key={t.id} turn={t} latest={t.id === lastId} task={t.taskId && cardTurn.get(t.taskId) === t.id ? p.tasks[t.taskId] : undefined} tasks={p.tasks} onOpenTask={p.onOpenTask} relay={t.relayId && cardTurn.get(t.relayId) === t.id ? p.relays[t.relayId] : undefined} onOpenRelay={p.onOpenRelay} />
@@ -128,6 +202,17 @@ export function Talk(p: Props) {
         </div>
         {!empty && composer}
       </section>
+    </div>
+  )
+}
+
+function RecentStrip({ onOpen }: { onOpen: (id: string) => void }) {
+  const chats = useChats([])
+  if (!chats.length) return null
+  return (
+    <div className="recent-strip">
+      <div className="eyebrow">Recent</div>
+      <RecentList chats={chats.slice(0, 4)} onOpen={onOpen} />
     </div>
   )
 }
@@ -197,6 +282,9 @@ function Composer(p: Props) {
             aria-label={p.listening ? 'Stop listening' : 'Talk'}
           >
             <Mic />
+          </button>
+          <button className="round" onClick={() => p.onNarrate(NARRATION[p.narrate].next)} title={`${NARRATION[p.narrate].label}. Click to change.`} aria-label={NARRATION[p.narrate].label}>
+            {NARRATION[p.narrate].icon}
           </button>
           <span className="composer-sep" aria-hidden="true" />
           {p.busy ? (

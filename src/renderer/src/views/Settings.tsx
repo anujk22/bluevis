@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_ACCENT, type Accent } from '../../../core/color'
-import type { ModelChoice, ProviderHealth, Settings, VoiceHealth } from '../../../core/types'
+import type { ModelChoice, Narration, ProviderHealth, Settings, VoiceHealth } from '../../../core/types'
 import { UsageDetail, type UsageState } from '../components/Usage'
+import { MODELS, modelKey } from '../components/HeaderMenus'
 
 const CODEX_MODELS = ['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra', 'gpt-5.6-luna']
 const CLAUDE_MODELS = ['haiku', 'sonnet', 'opus']
@@ -153,7 +154,7 @@ function ModelPicker({ value, onChange, localModels, allowLocal = true }: { valu
               ? { provider: 'codex', model: 'gpt-6-luna', effort: 'low' }
               : p === 'claude'
                 ? { provider: 'claude', model: 'haiku' }
-                : { provider: 'local', model: localModels[0] ?? '' }
+                : { provider: 'local', model: localModels[0] ?? '', effort: 'low' }
           )
         }}
       >
@@ -379,6 +380,21 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
             <ModelPicker value={settings.brain} localModels={localModels} onChange={(brain) => save({ brain })} />
           </div>
           <div className="field">
+            <label>In the model menu</label>
+            <div className="ctrl pick-models">
+              {MODELS.map((m) => {
+                const key = modelKey(m.choice)
+                const picks = settings.pickerModels ?? MODELS.map((x) => modelKey(x.choice))
+                const on = picks.includes(key)
+                return (
+                  <button key={key} className="chip" aria-pressed={on} onClick={() => save({ pickerModels: on ? picks.filter((k) => k !== key) : [...picks, key] })}>
+                    {m.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div className="field">
             <label>Default agent</label>
             <ModelPicker value={settings.worker} localModels={localModels} allowLocal={false} onChange={(worker) => save({ worker })} />
           </div>
@@ -426,9 +442,13 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
             </div>
           </div>
           <div className="field">
-            <label>Speak replies</label>
+            <label>Narration</label>
             <div className="ctrl">
-              <button className="switch" role="switch" aria-checked={settings.voice.speak} aria-label="Speak replies" onClick={() => save({ voice: { ...settings.voice, speak: !settings.voice.speak } })} />
+              <select className="select" value={settings.voice.narrate} onChange={(e) => save({ voice: { ...settings.voice, narrate: e.target.value as Narration } })} aria-label="Narration">
+                <option value="brief">Brief: short replies whole, the opening of long ones</option>
+                <option value="full">Full: read everything</option>
+                <option value="mute">Mute</option>
+              </select>
             </div>
           </div>
           <div className="field">
