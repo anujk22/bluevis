@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ModelChoice, Settings, Turn, AgentTask } from '../../../core/types'
 import type { RelayRun } from '../../../core/relay'
-import { Bell, Chevron } from './icons'
+import { Bell, Chevron, Gear } from './icons'
 import { until, type UsageState } from './Usage'
 
 function Popover({ button, children, align = 'right', label }: { button: (open: boolean) => ReactNode; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; label: string }) {
@@ -94,6 +94,56 @@ export function ModelMenu({ settings, label, usage, onChange }: { settings: Sett
               </div>
             )
           })}
+        </div>
+      )}
+    </Popover>
+  )
+}
+
+type Effort = ModelChoice['effort']
+const EFFORTS: { effort: Effort; label: string; note: string }[] = [
+  { effort: undefined, label: 'Off', note: 'answers right away' },
+  { effort: 'minimal', label: 'Minimal', note: 'a quick check' },
+  { effort: 'low', label: 'Low', note: 'a few seconds' },
+  { effort: 'medium', label: 'Medium', note: 'thinks it through' },
+  { effort: 'high', label: 'High', note: 'slowest, most careful' }
+]
+
+/** Thinking effort for the conversation model. Local models can turn thinking off; Codex always thinks a little. */
+export function EffortMenu({ settings, onChange }: { settings: Settings | null; onChange: (s: Settings) => void }) {
+  const api = window.bluevis
+  const cur = settings?.brain
+  if (!cur || cur.provider === 'claude') return null
+  const options = cur.provider === 'local' ? EFFORTS.filter((e) => e.effort !== 'minimal') : EFFORTS.filter((e) => e.effort)
+  const now = options.find((o) => o.effort === cur.effort) ?? options[0]
+  return (
+    <Popover
+      label={`Thinking: ${now.label}`}
+      button={() => (
+        <span className="icon-btn" title={`Thinking: ${now.label}`}>
+          <Gear />
+        </span>
+      )}
+    >
+      {(close) => (
+        <div className="menu">
+          <div className="eyebrow menu-head">Thinking</div>
+          {options.map((o) => (
+            <button
+              key={o.label}
+              className="menu-item"
+              role="menuitemradio"
+              aria-checked={o === now}
+              onClick={async () => {
+                const { effort: _, ...rest } = cur
+                onChange((await api.settings.set({ brain: o.effort ? { ...rest, effort: o.effort } : rest })) as Settings)
+                close()
+              }}
+            >
+              <span>{o.label}</span>
+              <span className="mono menu-note">{o.note}</span>
+            </button>
+          ))}
         </div>
       )}
     </Popover>

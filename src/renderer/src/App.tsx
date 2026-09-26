@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentTask, ModelChoice, OrbMode, Settings, Turn, VoiceHealth } from '../../core/types'
 import { Search } from './components/icons'
 import { UsageChips, useUsage } from './components/Usage'
-import { AccountMenu, AttentionMenu, ModelMenu, type AttentionItem } from './components/HeaderMenus'
+import { AccountMenu, AttentionMenu, EffortMenu, ModelMenu, type AttentionItem } from './components/HeaderMenus'
 import { allowanceNudge } from '../../core/usage'
 import { Orb } from './orb/Orb'
 import { Listener, Speaker } from './voice'
@@ -295,6 +295,7 @@ export function App() {
             </button>
           )}
           <ModelMenu settings={settings} label={ctx.brainLabel} usage={usage} onChange={setSettings} />
+          <EffortMenu settings={settings} onChange={setSettings} />
           <button
             className="icon-btn"
             aria-label="Search your vault"
