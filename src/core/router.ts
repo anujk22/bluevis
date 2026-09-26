@@ -20,6 +20,8 @@ export type Intent =
   | { type: 'relay'; url: string; note?: string }
   | { type: 'mail'; text: string }
   | { type: 'agenda'; text: string }
+  | { type: 'research'; query: string }
+  | { type: 'web-search'; query: string }
 
 const AGENT_WORDS: Record<string, { agent: AgentName; model?: string }> = {
   codex: { agent: 'codex' },
@@ -107,6 +109,11 @@ export function route(raw: string, projects: string[] = []): Intent {
     const body = rem[1].replace(/[,;]?\s*(?:but\s+)?keep (?:it|this|that) (?:private|local|out of (?:cloud|agent)[- ]?(?:agent )?handoffs?)\.?$/i, '').trim()
     return { type: 'remember', text: body, kind: 'fact', private: priv }
   }
+
+  const research = text.match(/^(?:please\s+)?(?:(?:deep\s+)?research|look into|dig into)\s*[:,]?\s+(.+)$/i)
+  if (research) return { type: 'research', query: research[1].trim() }
+  const web = text.match(/^(?:search|google|look up)\s*(?:the web|google|online)?\s*[:,]?\s*(?:for\s+)?(.+)$/i)
+  if (web && !/\b(my (?:notes|vault|memory)|in (?:my )?(?:notes|vault|memory))\b/i.test(web[1])) return { type: 'web-search', query: web[1].trim() }
 
   // Questions about email go to Claude with read-only Gmail tools.
   if (/\b(e-?mails?|inbox|gmail|mailbox|OAs?|online assessments?|hackerrank|codesignal|recruiters?|interview (?:invites?|requests?)|rejections?|offers? letters?)\b/i.test(text) && !/^(remember|note|save)\b/i.test(lower)) {

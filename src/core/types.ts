@@ -16,6 +16,8 @@ export type AgentEvent =
   | { kind: 'text-delta'; text: string }
   | { kind: 'message'; text: string }
   | { kind: 'reasoning'; text: string }
+  /** Streamed model thinking (local reasoning models). */
+  | { kind: 'thinking-delta'; text: string }
   | { kind: 'command'; id: string; command: string; status: 'running' | 'done' | 'failed'; exitCode?: number | null; output?: string }
   | { kind: 'file-change'; id: string; changes: { path: string; kind: string }[] }
   | { kind: 'tool'; id: string; name: string; detail?: string; status: 'running' | 'done' | 'failed' }
@@ -107,6 +109,11 @@ export interface Turn {
   /** Vault passages the model was given for this reply. */
   sources?: SourceRef[]
   relayId?: string
+  /** What the model thought before answering, shown folded under the reply. */
+  thinking?: string
+  thoughtMs?: number
+  /** Web pages a research answer drew on, in citation order. */
+  web?: { title: string; url: string }[]
   /** Tool calls made while answering (e.g. Gmail searches), shown so answers are not a black box. */
   activity?: string[]
 }

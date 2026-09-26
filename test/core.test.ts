@@ -306,3 +306,13 @@ describe('accent tint', () => {
     expect(Math.abs(r - g)).toBeLessThan(0.01)
   })
 })
+
+describe('web routes', () => {
+  it('sends "research" to in-app research and "search" to the browser', () => {
+    expect(route('research the best local speech models')).toEqual({ type: 'research', query: 'the best local speech models' })
+    expect(route('look into Splash benchmarks')).toEqual({ type: 'research', query: 'Splash benchmarks' })
+    expect(route('search for hackru prizes')).toEqual({ type: 'web-search', query: 'hackru prizes' })
+    expect(route('google weather new brunswick')).toEqual({ type: 'web-search', query: 'weather new brunswick' })
+    expect(route('search my notes for yonder').type).not.toBe('web-search')
+  })
+})

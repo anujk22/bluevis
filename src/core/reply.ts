@@ -46,7 +46,8 @@ export function parseReply(raw: string): ParsedReply {
       kept.push(line)
     }
   }
-  const shown = kept.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  // A separator with nothing after it is dropped, not shown.
+  const shown = kept.join('\n').replace(/\n\s*---\s*$/, '').replace(/\n{3,}/g, '\n\n').trim()
   // Everything before a lone '---' is spoken; the rest is detail for the screen.
   const parts = shown.split(/\n\s*---\s*\n/)
   // Without one, a short reply is read whole and a long one by its opening.

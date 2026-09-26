@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -20,6 +20,7 @@ import { run } from './shell'
 import type { RelayManager } from './relay'
 import type { TaskManager } from './tasks'
 import { ChatStore } from './chats'
+import { webFetch, webSearch } from './search'
 import type { Vault } from './vault'
 
 export interface BrainEvents {
@@ -166,6 +167,11 @@ export class Brain {
         return this.chat(intent.text, opts.screenshot, this.terminalBlock(intent.text))
       case 'delegate':
         return this.delegate({ kind: 'delegate', agent: intent.agent, model: intent.model, project: intent.project, prompt: intent.prompt, state: 'proposed' }, projects, true)
+      case 'research':
+        return this.research(intent.query)
+      case 'web-search':
+        void shell.openExternal(`https://www.google.com/search?q=${encodeURIComponent(intent.query)}`)
+        return this.say(`Searching Google for ${intent.query}.`)
       case 'open':
         return this.open(projects.find((p) => p.name === intent.target)!)
       case 'resume':
@@ -233,7 +239,7 @@ export class Brain {
   }
 
   /** Run one brain turn and resolve with the final text (or throw). */
-  private runBrain(prompt: string, o: { images?: string[]; fresh?: boolean; onDelta?: (text: string) => void } = {}): Promise<string> {
+  private runBrain(prompt: string, o: { images?: string[]; fresh?: boolean; onDelta?: (text: string) => void; onThinking?: (text: string) => void } = {}): Promise<string> {
     const s = getSettings()
     const choice = s.brain
     const cwd = this.activeProject?.path ?? this.workspace
@@ -261,6 +267,8 @@ export class Brain {
             streamed += e.text
             o.onDelta?.(streamed)
           }
+          if (e.kind === 'thinking-delta') o.onThinking?.(e.text)
+          if (e.kind === 'reasoning') o.onThinking?.(`${e.text}\n\n`)
           if (e.kind === 'message') text = text ? `${text}\n\n${e.text}` : e.text
           if (e.kind === 'error') failed = e.message
         }
@@ -280,7 +288,8 @@ export class Brain {
     const allowPrivate = choice.provider === 'local'
     // General questions get a one-line identity; the vault is only consulted when the question is about Anuj's life or work.
     const projects = await this.projects()
-    const personal = needsMemory(text, projects.map((p) => p.name)) || !!screenshot
+    // A local model always gets its memory: nothing leaves the Mac, and it lets it connect things Anuj did not flag as personal.
+    const personal = allowPrivate || needsMemory(text, projects.map((p) => p.name)) || !!screenshot
     const { text: knowledge, used } = personal
       ? await this.vault.context(text, { allowPrivate, project: this.activeProject?.name })
       : { text: IDENTITY, used: [] }
@@ -297,7 +306,10 @@ export class Brain {
     ]
       .filter(Boolean)
       .join('\n')
-    const prompt = `<situation>\n${env}\n</situation>\n${extra ? `\n${extra}\n` : ''}\n<knowledge>\n${knowledge || '(nothing relevant in the vault)'}\n</knowledge>\n\nAnuj${screenshot ? ' (looking at the screen)' : ''}: ${text}`
+    // Earlier chats stay on the Mac, so only a local model sees them.
+    const recalled = allowPrivate ? await this.chats.recall(text, this.chatId).catch(() => '') : ''
+    const earlier = recalled ? `\n<earlier_chats note="From Anuj's other recent chats with you. Use only if relevant; do not bring up otherwise.">\n${recalled}\n</earlier_chats>\n` : ''
+    const prompt = `<situation>\n${env}\n</situation>\n${extra ? `\n${extra}\n` : ''}${earlier}\n<knowledge>\n${knowledge || '(nothing relevant in the vault)'}\n</knowledge>\n\nAnuj${screenshot ? ' (looking at the screen)' : ''}: ${text}`
 
     const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: label(choice), sources: used })
     this.ev.busy(true)
@@ -306,7 +318,12 @@ export class Brain {
     try {
       const raw = await this.runBrain(prompt, {
         images: screenshot ? [screenshot] : undefined,
+        onThinking: (t) => {
+          turn.thinking = (turn.thinking ?? '') + t
+          this.update(turn)
+        },
         onDelta: (partial) => {
+          if (turn.thinking && turn.thoughtMs === undefined) turn.thoughtMs = Date.now() - turn.at
           turn.text = parseReply(partial).shown
           this.update(turn)
           speech.feed(partial)
@@ -491,6 +508,131 @@ Constraints:
     if (r.code !== 0) await run('open', [p.path])
     this.setProject(p)
     this.say(r.code === 0 ? `Opened ${p.name} in ${editor}.` : `Opened ${p.name} in Finder. ${editor} wasn't available.`)
+  }
+
+  /** One model call outside the conversation, streaming its thinking and text. */
+  private think(prompt: string, o: { effort?: ModelChoice['effort']; onThinking?: (t: string) => void; onText?: (t: string) => void } = {}): Promise<string> {
+    const s = getSettings()
+    const choice: ModelChoice = s.brain.provider === 'local' ? { ...s.brain, effort: o.effort ?? s.brain.effort } : s.brain
+    return new Promise((resolve, reject) => {
+      let text = ''
+      let streamed = ''
+      let failed: string | null = null
+      const handle = runProvider({
+        choice,
+        prompt,
+        cwd: this.workspace,
+        role: 'brain',
+        system: 'You are Vesper, Anuj\'s research assistant. Be accurate, specific and concise. No em dashes.',
+        localBaseUrl: s.localBaseUrl,
+        onEvent: (e) => {
+          if (e.kind === 'thinking-delta') o.onThinking?.(e.text)
+          if (e.kind === 'text-delta') o.onText?.((streamed += e.text))
+          if (e.kind === 'message') text = e.text
+          if (e.kind === 'error') failed = e.message
+        }
+      })
+      this.current = handle
+      void handle.done.then(() => {
+        if (this.current === handle) this.current = null
+        if (failed && !text && !streamed) reject(new Error(failed))
+        else resolve(text || streamed)
+      })
+    })
+  }
+
+  /**
+   * Research on the open web: plan searches, run them on free engines in parallel, read the best pages,
+   * then write a sourced answer. Every search and page read is shown as it happens.
+   */
+  private async research(question: string) {
+    const turn = this.push({ speaker: 'bluevis', text: '', pending: true, model: `${label(getSettings().brain)} · research`, activity: [], web: [] })
+    this.ev.busy(true)
+    const log = (line: string) => {
+      turn.activity = [...(turn.activity ?? []), line]
+      this.update(turn)
+    }
+    const onThinking = (t: string) => {
+      turn.thinking = (turn.thinking ?? '') + t
+      this.update(turn)
+    }
+    try {
+      const now = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', dateStyle: 'long' })
+      const plan = await this.think(
+        `Today is ${now}. Plan web searches to answer this well:\n\n${question}\n\nReply with only JSON: {"queries": [2 to 4 short, distinct search queries]}`,
+        { effort: 'low', onThinking }
+      )
+      const queries = ((): string[] => {
+        try {
+          const q = JSON.parse(plan.match(/\{[\s\S]*\}/)?.[0] ?? '{}').queries
+          return Array.isArray(q) && q.length ? q.slice(0, 4).map(String) : [question]
+        } catch {
+          return [question]
+        }
+      })()
+      const found = await Promise.all(
+        queries.map((q) =>
+          webSearch(q, 6).then(
+            (r) => (log(`Searched "${q}" · ${r.length} results`), r),
+            (e: Error) => (log(`Search "${q}" failed: ${e.message}`), [])
+          )
+        )
+      )
+      const seen = new Set<string>()
+      const results = found.flat().filter((r) => !seen.has(r.url) && seen.add(r.url)).slice(0, 12)
+      if (!results.length) throw new Error('No search engine answered. Check the connection and try again.')
+      // Read the top pages in full; the rest contribute their excerpts.
+      const top = results.slice(0, 4)
+      const pages = await webFetch(
+        top.map((r) => r.url),
+        question
+      ).catch(() => [])
+      for (const r of top) log(`Read ${new URL(r.url).hostname.replace(/^www\./, '')}`)
+      log(`Found in ${Math.round((Date.now() - turn.at) / 1000)}s · writing the answer`)
+      turn.web = results.map((r) => ({ title: r.title || new URL(r.url).hostname, url: r.url }))
+      this.update(turn)
+      const sources = results
+        .map((r, i) => {
+          const full = pages.find((p) => p.url === r.url)?.text
+          return `[${i + 1}] ${r.title}\n${r.url}\n${(full || r.text).slice(0, full ? 6000 : 1500)}`
+        })
+        .join('\n\n---\n\n')
+      const narrate = getSettings().voice.narrate
+      const speech = new SpeechStream((sentence) => this.ev.speakChunk(turn.id, sentence), 3, narrate === 'full')
+      turn.thinking = (turn.thinking ?? '') + '\n\n'
+      const answer = await this.think(
+        `Today is ${now}. Question: ${question}
+
+Answer from the sources below. Lead with a direct two or three sentence answer, then '---' on its own line, then the useful detail as tight markdown in at most 250 words (short sections or bullets, specific numbers, dates and names). Cite sources inline as [n]. Say plainly where sources disagree or where the answer is uncertain. Do not add a sources list; it is shown separately. No em dashes.
+
+<sources>
+${sources}
+</sources>`,
+        {
+          effort: 'low',
+          onThinking,
+          onText: (partial) => {
+            if (turn.thinking && turn.thoughtMs === undefined) turn.thoughtMs = Date.now() - turn.at
+            turn.text = parseReply(partial).shown
+            this.update(turn)
+            speech.feed(partial)
+          }
+        }
+      )
+      const reply = parseReply(answer)
+      turn.text = reply.shown || '(no answer)'
+      turn.spoken = reply.spoken
+      turn.pending = false
+      this.update(turn)
+      speech.finish(narrate === 'full' ? speakable(reply.shown) : reply.spoken)
+    } catch (e) {
+      turn.pending = false
+      turn.error = true
+      turn.text = (e as Error).message === 'Stopped' ? 'Stopped.' : `Research failed: ${(e as Error).message}`
+      this.update(turn)
+    } finally {
+      this.ev.busy(false)
+    }
   }
 
   private lastBriefAt = 0

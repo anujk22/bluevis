@@ -143,6 +143,7 @@ app.whenReady().then(async () => {
     context: (c) => send('context', { ...c, brainLabel: label(c.brain) }),
     settings: (s) => send('settings', s)
   })
+  brain.chats.embedder = (texts, query) => voice.embed(texts, query)
 
   const importer = new Importer(
     vault,

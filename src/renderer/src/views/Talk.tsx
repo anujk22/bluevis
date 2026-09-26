@@ -302,6 +302,32 @@ function Composer(p: Props) {
   )
 }
 
+/** The model's thinking: live while it streams, then folded to one line that opens on click. */
+function Thinking({ turn }: { turn: Turn }) {
+  const live = !!turn.pending && !turn.text
+  const tail = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (live && tail.current) tail.current.scrollTop = tail.current.scrollHeight
+  }, [live, turn.thinking])
+  const secs = Math.max(1, Math.round((turn.thoughtMs ?? Date.now() - turn.at) / 1000))
+  return (
+    <details className="thinking" open={live || undefined}>
+      <summary className="eyebrow">
+        {live ? (
+          <>
+            Thinking <Elapsed since={turn.at} />
+          </>
+        ) : (
+          `Thought for ${secs}s`
+        )}
+      </summary>
+      <div className="thinking-body" ref={tail} data-live={live}>
+        {turn.thinking!.trim()}
+      </div>
+    </details>
+  )
+}
+
 function time(at: number) {
   return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
@@ -375,8 +401,9 @@ function TurnView({ turn, latest, task, tasks, onOpenTask, relay, onOpenRelay }:
           </span>
         )}
       </div>
+      {turn.thinking && <Thinking turn={turn} />}
       {turn.pending && !turn.text ? (
-        <div className="pending">
+        turn.thinking ? null : <div className="pending">
           <span className="ink-dots">
             <span />
             <span />
@@ -401,6 +428,16 @@ function TurnView({ turn, latest, task, tasks, onOpenTask, relay, onOpenRelay }:
             </li>
           ))}
         </ul>
+      )}
+      {turn.web && turn.web.length > 0 && (
+        <div className="sources-line">
+          <span className="eyebrow">Sources</span>
+          {turn.web.map((w, i) => (
+            <a key={w.url} className="source-chip" href={w.url} target="_blank" rel="noreferrer" title={w.url}>
+              {i + 1} · {w.title.length > 48 ? `${w.title.slice(0, 46)}…` : w.title}
+            </a>
+          ))}
+        </div>
       )}
       {!turn.pending && turn.sources && turn.sources.length > 0 && (
         <div className="sources-line">

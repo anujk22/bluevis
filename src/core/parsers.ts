@@ -172,6 +172,8 @@ export function parseOpenAISSELine(line: string): AgentEvent[] {
   const d = safeJson(payload)
   const delta = d?.choices?.[0]?.delta
   if (delta?.content) return [{ kind: 'text-delta', text: delta.content }]
+  const thought = delta?.reasoning_content ?? delta?.reasoning
+  if (typeof thought === 'string' && thought) return [{ kind: 'thinking-delta', text: thought }]
   return []
 }
 
