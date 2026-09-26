@@ -13,6 +13,7 @@ const api = {
     turns: invoke('chat:turns'),
     list: invoke('chat:list'),
     open: invoke('chat:open'),
+    dictate: invoke('dictate:type'),
     context: invoke('chat:context')
   },
   actions: { approve: invoke('action:approve'), dismiss: invoke('action:dismiss') },

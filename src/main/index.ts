@@ -19,6 +19,7 @@ import { TaskManager } from './tasks'
 import { Vault } from './vault'
 import { VoiceService } from './voice'
 import { ensureSplash, stopSplash } from './splash'
+import { self as macSelf } from './mac'
 
 type Mode = 'compact' | 'expanded'
 
@@ -54,6 +55,18 @@ function setMode(m: Mode, focus = true) {
   win.setResizable(m === 'expanded')
   if (!win.isVisible()) win.show()
   if (focus && m === 'expanded') win.focus()
+}
+
+let dictationKey: string | null = null
+/** The dictation shortcut is configurable; rebinding releases the old one. It never shows the window, so focus stays where the text goes. */
+function bindDictation() {
+  if (dictationKey) globalShortcut.unregister(dictationKey)
+  dictationKey = getSettings().dictationHotkey || 'Alt+Shift+D'
+  try {
+    if (!globalShortcut.register(dictationKey, () => send('hotkey:dictate'))) dictationKey = null
+  } catch {
+    dictationKey = null
+  }
 }
 
 function createWindow() {
@@ -141,8 +154,13 @@ app.whenReady().then(async () => {
     speakChunk: (id, text) => getSettings().voice.narrate !== 'mute' && send('speak-chunk', id, text),
     stopSpeech: () => send('speech:stop'),
     context: (c) => send('context', { ...c, brainLabel: label(c.brain) }),
-    settings: (s) => send('settings', s)
+    settings: (s) => send('settings', s),
+    show: () => setMode('expanded')
   })
+  macSelf.place = (r) => {
+    if (mode !== 'expanded') setMode('expanded', false)
+    win?.setBounds(r, true)
+  }
   brain.chats.embedder = (texts, query) => voice.embed(texts, query)
 
   const importer = new Importer(
@@ -196,6 +214,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('chat:reset', () => brain.reset())
   ipcMain.handle('chat:turns', () => brain.turns)
   ipcMain.handle('chat:list', () => brain.chats.list())
+  ipcMain.handle('dictate:type', (_e, text: string) => brain.dictate(text))
   ipcMain.handle('chat:open', (_e, id: string) => brain.openChat(id))
   ipcMain.handle('chat:context', () => ({ ...brain.context(), brainLabel: label(brain.context().brain) }))
   ipcMain.handle('action:approve', (_e, id: string, project?: string, prompt?: string) => brain.approveAction(id, project, prompt))
@@ -261,6 +280,7 @@ app.whenReady().then(async () => {
     send('context', { ...brain.context(), brainLabel: label(s.brain) })
     if (patch.voice?.narrate === 'mute') send('speech:stop')
     if (patch.brain) void ensureSplash()
+    if ('dictationHotkey' in patch) bindDictation()
     return s
   })
   ipcMain.handle('providers:health', () => providerHealth(getSettings().localBaseUrl))
@@ -326,6 +346,7 @@ app.whenReady().then(async () => {
     if (!win?.isVisible()) win?.showInactive()
     send('hotkey:talk')
   })
+  bindDictation()
   globalShortcut.register('Alt+Shift+L', async () => {
     const shot = await captureScreen()
     setMode('expanded')

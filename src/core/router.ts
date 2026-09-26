@@ -22,6 +22,8 @@ export type Intent =
   | { type: 'agenda'; text: string }
   | { type: 'research'; query: string }
   | { type: 'web-search'; query: string }
+  /** Something to do on the Mac: open or quit apps, arrange windows. */
+  | { type: 'mac'; text: string }
 
 const AGENT_WORDS: Record<string, { agent: AgentName; model?: string }> = {
   codex: { agent: 'codex' },
@@ -129,6 +131,7 @@ export function route(raw: string, projects: string[] = []): Intent {
     const target = matchProject(open[1], projects)
     if (target) return { type: 'open', target }
   }
+  if (/^(?:please\s+)?(?:open|launch|start up|quit|close|arrange|split|tile|snap|put|move|maximi[sz]e|full ?screen)\b/.test(lower)) return { type: 'mac', text }
 
   return { type: 'chat', text }
 }

@@ -181,6 +181,10 @@ export interface Settings {
   localBaseUrl: string
   /** narrate: brief reads short replies whole and the lead of long ones; full reads everything; mute reads nothing. */
   voice: { enabled: boolean; ttsVoice: string; speed: number; narrate: Narration }
+  /** Always-on local listening for "Hey Vesper". */
+  wake?: boolean
+  /** Global shortcut (Electron accelerator) that starts and stops dictation into the focused app. */
+  dictationHotkey?: string
   /** Models offered in the header menu, as "provider:model". Unset means all. */
   pickerModels?: string[]
   projectRoots: string[]

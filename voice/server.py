@@ -26,7 +26,7 @@ TTS_MODEL = os.environ.get("BLUEVIS_TTS_MODEL", "mlx-community/Kokoro-82M-bf16")
 EMBED_MODEL = os.environ.get("BLUEVIS_EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 SAMPLE_RATE = 24000
 # Bump when endpoints change so the app replaces an older running sidecar.
-VERSION = 4
+VERSION = 5
 
 # MLX is not thread-safe; serialize all model work.
 lock = threading.Lock()
@@ -68,7 +68,7 @@ def transcribe(path):
 
     t = time.time()
     # Names Whisper would otherwise mishear; it biases spelling, not content.
-    vocab = "Bluevis, Codex, Claude, Opus, Sonnet, Haiku, Gemini, GPT, Luna, Sol, Astra, Yonder, Devpost, Canvas, Rutgers, Anuj, Obsidian, repo, npm, TypeScript."
+    vocab = "Vesper, Bluevis, Codex, Claude, Opus, Sonnet, Haiku, Gemini, GPT, Luna, Sol, Astra, Yonder, Devpost, Canvas, Rutgers, Anuj, Obsidian, repo, npm, TypeScript."
     result = mlx_whisper.transcribe(path, path_or_hf_repo=STT_MODEL, language="en", initial_prompt=vocab)
     state["stt_ready"] = True
     log(f"stt {time.time() - t:.2f}s")

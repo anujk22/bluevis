@@ -6,6 +6,7 @@ import { AccountMenu, AttentionMenu, EffortMenu, ModelMenu, type AttentionItem }
 import { allowanceNudge } from '../../core/usage'
 import { Orb } from './orb/Orb'
 import { Listener, Speaker } from './voice'
+import { WakeListener } from './wake'
 import { Talk } from './views/Talk'
 import { Agents } from './views/Agents'
 import { Memory } from './views/Memory'
@@ -38,6 +39,25 @@ export interface Shot {
 }
 
 const ACTIVE = new Set(['starting', 'investigating', 'editing', 'testing', 'awaiting-approval'])
+
+/** A short soft tone: high when Vesper starts listening, lower when it is done. */
+function cue(freq: number) {
+  try {
+    const ctx = new AudioContext()
+    const o = ctx.createOscillator()
+    const g = ctx.createGain()
+    o.frequency.value = freq
+    g.gain.setValueAtTime(0.0001, ctx.currentTime)
+    g.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02)
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18)
+    o.connect(g).connect(ctx.destination)
+    o.start()
+    o.stop(ctx.currentTime + 0.2)
+    o.onended = () => void ctx.close()
+  } catch {
+    // No audio output is not worth a notice.
+  }
+}
 
 export function App() {
   const api = window.bluevis
@@ -132,6 +152,7 @@ export function App() {
       }),
       api.on('speech:stop', () => speaker.stop()),
       api.on('hotkey:talk', () => toggleListen()),
+      api.on('hotkey:dictate', () => void dictateRef.current()),
       api.on('screen:attached', (s) => {
         const r = s as Shot | { error: string }
         if ('error' in r) setNotice(r.error)
@@ -173,33 +194,88 @@ export function App() {
     void sendRef.current('Brief me')
   }, [settings?.morningBrief, winMode])
 
+  /** Record one utterance and transcribe it locally. Null when nothing usable was said. */
+  const capture = useCallback(
+    async (opts: { silence?: number; maxSeconds?: number } = {}): Promise<string | null> => {
+      if (voiceRef.current.state !== 'ready') {
+        setNotice(voiceRef.current.state === 'starting' ? 'Voice is still loading. Type for now, or try again in a moment.' : `Voice is unavailable: ${voiceRef.current.detail || 'turn it on in Settings'}.`)
+        return null
+      }
+      speaker.stop()
+      const l = new Listener()
+      listener.current = l
+      setListening(true)
+      const res = await l.listen(opts)
+      listener.current = null
+      setListening(false)
+      if ('cancelled' in res) {
+        if (res.reason === 'error') setNotice(res.message ?? 'Microphone unavailable')
+        return null
+      }
+      try {
+        return ((await api.voice.stt(res.wav)) as string).trim() || null
+      } catch (e) {
+        setNotice(`Transcription failed: ${(e as Error).message}`)
+        return null
+      }
+    },
+    [api, speaker]
+  )
+
   const toggleListen = useCallback(async () => {
-    if (listener.current) {
-      listener.current.stop()
-      return
+    if (listener.current) return listener.current.stop()
+    const text = await capture()
+    if (text) await sendRef.current(text, 'voice')
+  }, [capture])
+
+  // Dictation types into whatever app has focus. The shortcut starts it and, pressed again, ends it early.
+  const dictate = useCallback(
+    async (said?: string) => {
+      if (!said && listener.current) return listener.current.stop()
+      if (!said) cue(880)
+      const text = said ?? (await capture({ silence: 2, maxSeconds: 180 }))
+      if (!text) return
+      cue(660)
+      await api.chat.dictate(text).catch((e: Error) => setNotice(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
+    },
+    [api, capture]
+  )
+  const dictateRef = useRef(dictate)
+  dictateRef.current = dictate
+
+  // "Hey Vesper": "transcribe ..." dictates, anything else is a command; "Vesper" alone waits for one.
+  const onWake = useCallback(
+    async (command: string) => {
+      cue(880)
+      const said = command || (await capture())
+      if (!said) return
+      const t = said.match(/^(?:transcribe|dictate|type(?: this)?)\b[\s:,.-]*(.*)$/is)
+      if (t) return dictate(t[1].trim() || undefined)
+      await sendRef.current(said, 'voice')
+    },
+    [capture, dictate]
+  )
+  const onWakeRef = useRef(onWake)
+  onWakeRef.current = onWake
+  const wake = useRef<WakeListener | null>(null)
+  useEffect(() => {
+    const want = !!settings?.wake && voice.state === 'ready'
+    if (want && !wake.current) {
+      const w = new WakeListener(
+        async (wav) => (await api.voice.stt(wav)) as string,
+        (c) => void onWakeRef.current(c),
+        () => !!listener.current || speaker.speaking
+      )
+      wake.current = w
+      w.start().catch((e: Error) => {
+        wake.current = null
+        setNotice(`Wake listening is off: ${e.message}`)
+      })
+    } else if (!want && wake.current) {
+      wake.current.stop()
+      wake.current = null
     }
-    if (voiceRef.current.state !== 'ready') {
-      setNotice(voiceRef.current.state === 'starting' ? 'Voice is still loading. Type for now, or try again in a moment.' : `Voice is unavailable: ${voiceRef.current.detail || 'turn it on in Settings'}.`)
-      return
-    }
-    speaker.stop()
-    const l = new Listener()
-    listener.current = l
-    setListening(true)
-    const res = await l.listen()
-    listener.current = null
-    setListening(false)
-    if ('cancelled' in res) {
-      if (res.reason === 'error') setNotice(res.message ?? 'Microphone unavailable')
-      return
-    }
-    try {
-      const text = (await api.voice.stt(res.wav)) as string
-      if (text.trim()) await sendRef.current(text, 'voice')
-    } catch (e) {
-      setNotice(`Transcription failed: ${(e as Error).message}`)
-    }
-  }, [api, speaker])
+  }, [api, speaker, settings?.wake, voice.state])
 
   const taskList = useMemo(() => Object.values(tasks).sort((a, b) => b.startedAt - a.startedAt), [tasks])
   const relayList = useMemo(() => Object.values(relays).sort((a, b) => b.startedAt - a.startedAt), [relays])

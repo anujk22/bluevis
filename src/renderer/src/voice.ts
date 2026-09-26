@@ -25,7 +25,7 @@ export function encodeWav(samples: Float32Array, rate: number): ArrayBuffer {
   return buf
 }
 
-function downsample(input: Float32Array, from: number, to: number): Float32Array {
+export function downsample(input: Float32Array, from: number, to: number): Float32Array {
   if (from === to) return input
   const ratio = from / to
   const out = new Float32Array(Math.floor(input.length / ratio))
@@ -52,7 +52,7 @@ export class Listener {
   private ctx: AudioContext | null = null
   private stream: MediaStream | null = null
 
-  async listen({ maxSeconds = 30, untilStop = false } = {}): Promise<ListenResult> {
+  async listen({ maxSeconds = 30, untilStop = false, silence = 1.1 } = {}): Promise<ListenResult> {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
     } catch (e) {
@@ -97,7 +97,7 @@ export class Listener {
           return heard ? finish({ wav: encodeWav(downsample(concat(chunks), rate, 16000), 16000) }) : finish({ cancelled: true, reason: 'manual' })
         }
         if (!untilStop && !heard && elapsed > 7) return finish({ cancelled: true, reason: 'silence' })
-        if ((!untilStop && heard && silentFor > 1.1) || elapsed > maxSeconds) finish({ wav: encodeWav(downsample(concat(chunks), rate, 16000), 16000) })
+        if ((!untilStop && heard && silentFor > silence) || elapsed > maxSeconds) finish({ wav: encodeWav(downsample(concat(chunks), rate, 16000), 16000) })
       }
       src.connect(proc)
       proc.connect(this.ctx!.destination)

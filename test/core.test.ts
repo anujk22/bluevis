@@ -176,9 +176,10 @@ describe('router', () => {
     expect(route('any assignments due this week', projects)).toMatchObject({ type: 'agenda' })
   })
 
-  it('opens only known projects, otherwise chats', () => {
+  it('opens known projects; other opening and arranging goes to Mac commands', () => {
     expect(route('open yonder', projects)).toEqual({ type: 'open', target: 'Yonder' })
-    expect(route('open the pod bay doors', projects)).toMatchObject({ type: 'chat' })
+    expect(route('open claude and vesper side by side', projects)).toEqual({ type: 'mac', text: 'open claude and vesper side by side' })
+    expect(route('split chrome and vs code', projects)).toMatchObject({ type: 'mac' })
     expect(route("why isn't this working?", projects)).toMatchObject({ type: 'chat' })
   })
 
@@ -314,5 +315,17 @@ describe('web routes', () => {
     expect(route('search for hackru prizes')).toEqual({ type: 'web-search', query: 'hackru prizes' })
     expect(route('google weather new brunswick')).toEqual({ type: 'web-search', query: 'weather new brunswick' })
     expect(route('search my notes for yonder').type).not.toBe('web-search')
+  })
+})
+
+import { wakeCommand } from '../src/renderer/src/wake'
+
+describe('wake word', () => {
+  it('finds "Vesper" as Whisper hears it and keeps the command', () => {
+    expect(wakeCommand('Hey Vesper, open Claude.')).toBe('open Claude.')
+    expect(wakeCommand('Vespa transcribe this for me')).toBe('transcribe this for me')
+    expect(wakeCommand('Hey, Vesper.')).toBe('')
+    expect(wakeCommand('Hay Vesper open Claude')).toBe('open Claude')
+    expect(wakeCommand('I was reading about vesper sparrows')).toBeNull()
   })
 })

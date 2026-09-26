@@ -147,6 +147,7 @@ async function streamSSE(body: ReadableStream<Uint8Array>, parse: (line: string)
           text += ev.text
           o.onEvent(ev)
         }
+        if (ev.kind === 'thinking-delta') o.onEvent(ev)
       }
     }
   }

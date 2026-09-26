@@ -442,6 +442,29 @@ export function SettingsView({ settings, voice, usage, onChange }: { settings: S
             </div>
           </div>
           <div className="field">
+            <label>Hey Vesper</label>
+            <div className="ctrl">
+              <button className="switch" role="switch" aria-checked={!!settings.wake} aria-label="Listen for Hey Vesper" onClick={() => save({ wake: !settings.wake })} />
+              <span className="mono" style={{ color: 'var(--mist)' }}>
+                Always listening, on this Mac only. Say “Vesper, transcribe…”, “open…”, “search…” or “research…”
+              </span>
+            </div>
+          </div>
+          <div className="field">
+            <label>Dictation shortcut</label>
+            <div className="ctrl">
+              <input
+                className="input mono"
+                defaultValue={settings.dictationHotkey || 'Alt+Shift+D'}
+                onBlur={(e) => e.target.value.trim() !== (settings.dictationHotkey || 'Alt+Shift+D') && save({ dictationHotkey: e.target.value.trim() })}
+                aria-label="Dictation shortcut"
+              />
+              <span className="mono" style={{ color: 'var(--mist)' }}>
+                Types into the focused app. Needs Accessibility permission.
+              </span>
+            </div>
+          </div>
+          <div className="field">
             <label>Narration</label>
             <div className="ctrl">
               <select className="select" value={settings.voice.narrate} onChange={(e) => save({ voice: { ...settings.voice, narrate: e.target.value as Narration } })} aria-label="Narration">

@@ -21,6 +21,7 @@ import type { RelayManager } from './relay'
 import type { TaskManager } from './tasks'
 import { ChatStore } from './chats'
 import { webFetch, webSearch } from './search'
+import { findApp, installedApps, openApp, placeApp, quitApp, typeText, type Region } from './mac'
 import type { Vault } from './vault'
 
 export interface BrainEvents {
@@ -32,6 +33,8 @@ export interface BrainEvents {
   speakChunk: (turnId: string, sentence: string) => void
   stopSpeech: () => void
   context: (c: { activeProject?: string; brain: ModelChoice }) => void
+  /** Bring the window forward (research started by voice while it was hidden). */
+  show?: () => void
   settings: (s: Settings) => void
 }
 
@@ -168,7 +171,10 @@ export class Brain {
       case 'delegate':
         return this.delegate({ kind: 'delegate', agent: intent.agent, model: intent.model, project: intent.project, prompt: intent.prompt, state: 'proposed' }, projects, true)
       case 'research':
+        this.ev.show?.()
         return this.research(intent.query)
+      case 'mac':
+        return this.macCommand(intent.text)
       case 'web-search':
         void shell.openExternal(`https://www.google.com/search?q=${encodeURIComponent(intent.query)}`)
         return this.say(`Searching Google for ${intent.query}.`)
@@ -511,9 +517,11 @@ Constraints:
   }
 
   /** One model call outside the conversation, streaming its thinking and text. */
-  private think(prompt: string, o: { effort?: ModelChoice['effort']; onThinking?: (t: string) => void; onText?: (t: string) => void } = {}): Promise<string> {
+  private think(prompt: string, o: { effort?: ModelChoice['effort'] | 'none'; onThinking?: (t: string) => void; onText?: (t: string) => void } = {}): Promise<string> {
     const s = getSettings()
-    const choice: ModelChoice = s.brain.provider === 'local' ? { ...s.brain, effort: o.effort ?? s.brain.effort } : s.brain
+    const { effort: _, ...base } = s.brain
+    const effort = o.effort ?? s.brain.effort
+    const choice: ModelChoice = s.brain.provider === 'local' ? (effort === 'none' || !effort ? base : { ...base, effort }) : s.brain
     return new Promise((resolve, reject) => {
       let text = ''
       let streamed = ''
@@ -633,6 +641,66 @@ ${sources}
     } finally {
       this.ev.busy(false)
     }
+  }
+
+  /**
+   * Mac commands. Plain "open X and Y" runs at once; anything else (placing windows, several steps)
+   * is planned by the model as a short list of actions. Not a Mac action: answered as chat.
+   */
+  private async macCommand(text: string) {
+    const names = text.replace(/^(?:please\s+)?(?:open|launch|start up)\s+/i, '').split(/\s*(?:,|\band\b)\s*/i).filter(Boolean)
+    if (/^(?:please\s+)?(?:open|launch|start up)\s/i.test(text) && names.every((n) => findApp(n))) {
+      const opened = await Promise.all(names.map((n) => openApp(n)))
+      return this.say(`Opened ${opened.join(' and ')}.`)
+    }
+    const plan = await this.think(
+      `Turn Anuj's request into Mac actions.
+
+Installed apps: ${installedApps().join(', ')}. You are the app named Vesper.
+Actions:
+{"do":"open","app":name} | {"do":"quit","app":name} | {"do":"place","app":name,"region":"left|right|full|top|bottom|left-third|center-third|right-third|center"} | {"do":"url","url":string} | {"do":"search","query":string}
+"place" opens the app too. For "split", "side by side" or "left and right", place the first app left and the second right.
+
+Request: ${text}
+
+Reply with only JSON: {"actions":[...],"say":"one short sentence confirming what you did"}. If the request is not something to do on the Mac, reply {"actions":[]}.`,
+      { effort: 'none' }
+    )
+    let parsed: { actions?: { do: string; app?: string; region?: Region; url?: string; query?: string }[]; say?: string } = {}
+    try {
+      parsed = JSON.parse(plan.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
+    } catch {
+      // Not JSON: treat as chat below.
+    }
+    if (!parsed.actions?.length) return this.chat(text)
+    const failed: string[] = []
+    for (const a of parsed.actions) {
+      try {
+        if (a.do === 'open' && a.app) await openApp(a.app)
+        else if (a.do === 'quit' && a.app) await quitApp(a.app)
+        else if (a.do === 'place' && a.app) await placeApp(a.app, a.region ?? 'full')
+        else if (a.do === 'url' && a.url && /^https?:\/\//.test(a.url)) await shell.openExternal(a.url)
+        else if (a.do === 'search' && a.query) await shell.openExternal(`https://www.google.com/search?q=${encodeURIComponent(a.query)}`)
+      } catch (e) {
+        failed.push((e as Error).message)
+      }
+    }
+    if (failed.length) return this.say(`${failed[0]}${failed.length > 1 ? ` (and ${failed.length - 1} more)` : ''}`, { error: true })
+    return this.say(parsed.say || 'Done.')
+  }
+
+  /** Clean up dictated text (punctuation, filler words, "scratch that") and type it where the cursor is. */
+  async dictate(raw: string) {
+    let text = raw.trim()
+    if (!text) return
+    if (text.split(/\s+/).length > 5) {
+      const cleaned = await this.think(
+        `Clean up this dictation. Fix punctuation and capitalization, drop filler words (um, uh, like as filler), and apply spoken corrections ("scratch that", "I mean", "actually no"). Keep the wording otherwise. Reply with only the cleaned text.\n\n${text}`,
+        { effort: 'none' }
+      ).catch(() => '')
+      if (cleaned.trim()) text = cleaned.trim().replace(/^"|"$/g, '')
+    }
+    await typeText(text)
   }
 
   private lastBriefAt = 0
