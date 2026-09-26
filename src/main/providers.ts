@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { parseClaudeLine, parseCodexLine, parseOpenAISSELine, LineBuffer } from '../core/parsers'
 import type { AgentEvent, ModelChoice, ProviderHealth } from '../core/types'
 import { run, spawnLines } from './shell'
+import { readySplash } from './splash'
 
 export interface RunOptions {
   choice: ModelChoice
@@ -169,6 +170,7 @@ function runLocal(o: RunOptions): RunHandle {
             : o.prompt
         }
       ]
+      await readySplash(base, () => o.onEvent({ kind: 'progress', label: 'Loading the local model' }))
       const res = await fetch(`${base}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

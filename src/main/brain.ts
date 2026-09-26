@@ -245,7 +245,7 @@ export class Brain {
   }
 
   /** Run one brain turn and resolve with the final text (or throw). */
-  private runBrain(prompt: string, o: { images?: string[]; fresh?: boolean; onDelta?: (text: string) => void; onThinking?: (text: string) => void } = {}): Promise<string> {
+  private runBrain(prompt: string, o: { images?: string[]; fresh?: boolean; onDelta?: (text: string) => void; onThinking?: (text: string) => void; onProgress?: (label: string) => void } = {}): Promise<string> {
     const s = getSettings()
     const choice = s.brain
     const cwd = this.activeProject?.path ?? this.workspace
@@ -274,6 +274,7 @@ export class Brain {
             o.onDelta?.(streamed)
           }
           if (e.kind === 'thinking-delta') o.onThinking?.(e.text)
+          if (e.kind === 'progress') o.onProgress?.(e.label)
           if (e.kind === 'reasoning') o.onThinking?.(`${e.text}\n\n`)
           if (e.kind === 'message') text = text ? `${text}\n\n${e.text}` : e.text
           if (e.kind === 'error') failed = e.message
@@ -326,6 +327,10 @@ export class Brain {
         images: screenshot ? [screenshot] : undefined,
         onThinking: (t) => {
           turn.thinking = (turn.thinking ?? '') + t
+          this.update(turn)
+        },
+        onProgress: (label) => {
+          turn.status = label
           this.update(turn)
         },
         onDelta: (partial) => {
@@ -517,7 +522,7 @@ Constraints:
   }
 
   /** One model call outside the conversation, streaming its thinking and text. */
-  private think(prompt: string, o: { effort?: ModelChoice['effort'] | 'none'; onThinking?: (t: string) => void; onText?: (t: string) => void } = {}): Promise<string> {
+  private think(prompt: string, o: { effort?: ModelChoice['effort'] | 'none'; onThinking?: (t: string) => void; onText?: (t: string) => void; onProgress?: (label: string) => void } = {}): Promise<string> {
     const s = getSettings()
     const { effort: _, ...base } = s.brain
     const effort = o.effort ?? s.brain.effort
@@ -535,6 +540,7 @@ Constraints:
         localBaseUrl: s.localBaseUrl,
         onEvent: (e) => {
           if (e.kind === 'thinking-delta') o.onThinking?.(e.text)
+          if (e.kind === 'progress') o.onProgress?.(e.label)
           if (e.kind === 'text-delta') o.onText?.((streamed += e.text))
           if (e.kind === 'message') text = e.text
           if (e.kind === 'error') failed = e.message
@@ -568,7 +574,7 @@ Constraints:
       const now = new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York', dateStyle: 'long' })
       const plan = await this.think(
         `Today is ${now}. Plan web searches to answer this well:\n\n${question}\n\nReply with only JSON: {"queries": [2 to 4 short, distinct search queries]}`,
-        { effort: 'low', onThinking }
+        { effort: 'low', onThinking, onProgress: (label) => ((turn.status = label), this.update(turn)) }
       )
       const queries = ((): string[] => {
         try {

@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentTask, ModelChoice, OrbMode, Settings, Turn, VoiceHealth } from '../../core/types'
 import { Search } from './components/icons'
 import { UsageChips, useUsage } from './components/Usage'
-import { AccountMenu, AttentionMenu, EffortMenu, ModelMenu, type AttentionItem } from './components/HeaderMenus'
+import { AccountMenu, AttentionMenu, ModelMenu, type AttentionItem } from './components/HeaderMenus'
 import { allowanceNudge } from '../../core/usage'
 import { Orb } from './orb/Orb'
 import { Listener, Speaker } from './voice'
 import { WakeListener } from './wake'
+import { levelPatch } from './components/ThinkingRail'
 import { Talk } from './views/Talk'
 import { Agents } from './views/Agents'
 import { Memory } from './views/Memory'
@@ -371,7 +372,6 @@ export function App() {
             </button>
           )}
           <ModelMenu settings={settings} label={ctx.brainLabel} usage={usage} onChange={setSettings} />
-          <EffortMenu settings={settings} onChange={setSettings} />
           <button
             className="icon-btn"
             aria-label="Search your vault"
@@ -439,6 +439,8 @@ export function App() {
               setTurns((await api.chat.open(id)) as Turn[])
             }}
             onNewChat={() => void api.chat.reset()}
+            settings={settings}
+            onThink={async (level) => settings && setSettings((await api.settings.set(levelPatch(settings, level))) as Settings)}
             onOpenRelay={(id) => {
               setFocusRelay(id)
               setView('relays')

@@ -18,7 +18,7 @@ import { adoptLoginShellPath, run } from './shell'
 import { TaskManager } from './tasks'
 import { Vault } from './vault'
 import { VoiceService } from './voice'
-import { ensureSplash, stopSplash } from './splash'
+import { ensureSplash, managePower, stopSplash } from './splash'
 import { self as macSelf } from './mac'
 
 type Mode = 'compact' | 'expanded'
@@ -288,6 +288,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
     const s = updateSettings(patch)
+    // Every view holds settings; send the new ones so none acts on a stale copy.
+    send('settings', s)
     send('context', { ...brain.context(), brainLabel: label(s.brain) })
     if (patch.voice?.narrate === 'mute') send('speech:stop')
     if (patch.brain) void ensureSplash()
@@ -366,6 +368,7 @@ app.whenReady().then(async () => {
 
   if (getSettings().voice.enabled) void voice.start()
   void ensureSplash()
+  managePower()
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
     voice.stop()

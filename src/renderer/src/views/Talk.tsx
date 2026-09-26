@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import type { AgentTask, ChatSummary, Narration, Turn, VoiceHealth } from '../../../core/types'
+import type { AgentTask, ChatSummary, Narration, Settings, Turn, VoiceHealth } from '../../../core/types'
+import { ThinkingRail, type ThinkLevel } from '../components/ThinkingRail'
 import type { Shot } from '../App'
 import { Arrow, ArrowRight, Bars, Book, Clip, Clock, Eye, Mic, Person, Plus, SpeakerBrief, SpeakerFull, SpeakerMute, Square } from '../components/icons'
 import { Popover } from '../components/HeaderMenus'
@@ -31,6 +32,8 @@ interface Props {
   onNarrate: (n: Narration) => void
   onOpenChat: (id: string) => void
   onNewChat: () => void
+  settings: Settings | null
+  onThink: (level: ThinkLevel) => void
 }
 
 const NARRATION: Record<Narration, { next: Narration; label: string; icon: ReactNode }> = {
@@ -283,6 +286,7 @@ function Composer(p: Props) {
           >
             <Mic />
           </button>
+          {p.settings && p.settings.brain.provider !== 'claude' && <ThinkingRail settings={p.settings} onPick={p.onThink} />}
           <button className="round" onClick={() => p.onNarrate(NARRATION[p.narrate].next)} title={`${NARRATION[p.narrate].label}. Click to change.`} aria-label={NARRATION[p.narrate].label}>
             {NARRATION[p.narrate].icon}
           </button>
@@ -302,29 +306,113 @@ function Composer(p: Props) {
   )
 }
 
-/** The model's thinking: live while it streams, then folded to one line that opens on click. */
-function Thinking({ turn }: { turn: Turn }) {
+type Panel = 'thinking' | 'activity' | 'web' | 'vault'
+
+const hasTrace = (t: Turn) => !!(t.thinking || t.activity?.length || t.web?.length || (!t.pending && t.sources?.length))
+
+const host = (u: string) => {
+  try {
+    return new URL(u).hostname.replace(/^www\./, '')
+  } catch {
+    return u
+  }
+}
+
+/**
+ * How a reply was made, kept out of the way: one row of pills (thinking, searches, sources, notes)
+ * that each fold open. Before any answer text arrives the live panel stays open so the work is
+ * visible; it folds away as the answer starts.
+ */
+function Trace({ turn }: { turn: Turn }) {
+  const api = window.bluevis
   const live = !!turn.pending && !turn.text
+  const [chosen, setChosen] = useState<Panel | null | undefined>(undefined)
+  const auto: Panel | null = live ? (turn.thinking ? 'thinking' : turn.activity?.length ? 'activity' : null) : null
+  const open = chosen === undefined ? auto : chosen
+  const toggle = (p: Panel) => setChosen(open === p ? null : p)
   const tail = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     if (live && tail.current) tail.current.scrollTop = tail.current.scrollHeight
   }, [live, turn.thinking])
+  if (!hasTrace(turn)) return null
+  const searches = turn.activity?.filter((a) => a.startsWith('Searched')).length ?? 0
+  const reads = turn.activity?.filter((a) => a.startsWith('Read ')).length ?? 0
   const secs = Math.max(1, Math.round((turn.thoughtMs ?? Date.now() - turn.at) / 1000))
+  const pill = (p: Panel, label: ReactNode, pulse = false) => (
+    <button className="trace-pill" aria-expanded={open === p} onClick={() => toggle(p)} data-live={pulse}>
+      {pulse && <span className="trace-dot" />}
+      {label}
+      <span className="trace-caret" aria-hidden="true">
+        ›
+      </span>
+    </button>
+  )
   return (
-    <details className="thinking" open={live || undefined}>
-      <summary className="eyebrow">
-        {live ? (
-          <>
-            Thinking <Elapsed since={turn.at} />
-          </>
-        ) : (
-          `Thought for ${secs}s`
-        )}
-      </summary>
-      <div className="thinking-body" ref={tail} data-live={live}>
-        {turn.thinking!.trim()}
+    <div className="trace" data-live={live}>
+      <div className="trace-row">
+        {turn.thinking &&
+          pill(
+            'thinking',
+            live && !!turn.thinking && !turn.text ? (
+              <>
+                Thinking <Elapsed since={turn.at} />
+              </>
+            ) : (
+              `${turn.activity?.length ? 'Worked' : 'Thought'} for ${secs}s`
+            ),
+            live
+          )}
+        {!!turn.activity?.length && pill('activity', searches || reads ? `${searches} search${searches === 1 ? '' : 'es'} · ${reads} page${reads === 1 ? '' : 's'}` : `${turn.activity.length} steps`, live && !turn.thinking)}
+        {!!turn.web?.length && pill('web', `${turn.web.length} sources`)}
+        {!turn.pending && !!turn.sources?.length && pill('vault', `${turn.sources.length} from your vault`)}
       </div>
-    </details>
+      <Fold open={open === 'thinking'}>
+        <div className="trace-panel thinking-body" ref={tail} data-live={live}>
+          {turn.thinking?.trim()}
+        </div>
+      </Fold>
+      <Fold open={open === 'activity'}>
+        <ul className="trace-panel events">
+          {turn.activity?.map((a, i) => (
+            <li key={i} className="mono">
+              {a}
+            </li>
+          ))}
+        </ul>
+      </Fold>
+      <Fold open={open === 'web'}>
+        <ol className="trace-panel web-list">
+          {turn.web?.map((w, i) => (
+            <li key={w.url}>
+              <a href={w.url} target="_blank" rel="noreferrer" title={w.url}>
+                <span className="mono web-n">{i + 1}</span>
+                <span className="web-title">{w.title}</span>
+                <span className="mono web-host">{host(w.url)}</span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </Fold>
+      <Fold open={open === 'vault'}>
+        <div className="trace-panel sources-line">
+          {turn.sources?.map((s) => (
+            <button key={`${s.path}#${s.heading ?? ''}`} className="source-chip" onClick={() => api.memory.open(s.path)} title={s.path}>
+              {s.title}
+              {s.heading ? <span> › {s.heading}</span> : null}
+            </button>
+          ))}
+        </div>
+      </Fold>
+    </div>
+  )
+}
+
+/** Height animates between 0 and the content's natural height (grid row 0fr to 1fr). */
+function Fold({ open, children }: { open: boolean; children: ReactNode }) {
+  return (
+    <div className="fold" data-open={open} aria-hidden={!open}>
+      <div className="fold-inner">{children}</div>
+    </div>
   )
 }
 
@@ -401,53 +489,25 @@ function TurnView({ turn, latest, task, tasks, onOpenTask, relay, onOpenRelay }:
           </span>
         )}
       </div>
-      {turn.thinking && <Thinking turn={turn} />}
+      <Trace turn={turn} />
       {turn.pending && !turn.text ? (
-        turn.thinking ? null : <div className="pending">
-          <span className="ink-dots">
-            <span />
-            <span />
-            <span />
-          </span>
-          working
-          <Elapsed since={turn.at} />
-        </div>
+        hasTrace(turn) ? null : (
+          <div className="pending">
+            <span className="ink-dots">
+              <span />
+              <span />
+              <span />
+            </span>
+            {turn.status ?? 'working'}
+            <Elapsed since={turn.at} />
+          </div>
+        )
       ) : (
-        <>
+        <div className="answer">
           <p className={`spoken ${spoken.length > 150 ? 'spoken-long' : ''}`}>
             <Inline text={spoken} />
           </p>
           {rest.length > 0 && <Markdown className="detail" text={rest.join('\n\n')} />}
-        </>
-      )}
-      {turn.activity && turn.activity.length > 0 && (
-        <ul className="events" style={{ marginTop: 12 }}>
-          {turn.activity.map((a, i) => (
-            <li key={i} className="mono">
-              {a}
-            </li>
-          ))}
-        </ul>
-      )}
-      {turn.web && turn.web.length > 0 && (
-        <div className="sources-line">
-          <span className="eyebrow">Sources</span>
-          {turn.web.map((w, i) => (
-            <a key={w.url} className="source-chip" href={w.url} target="_blank" rel="noreferrer" title={w.url}>
-              {i + 1} · {w.title.length > 48 ? `${w.title.slice(0, 46)}…` : w.title}
-            </a>
-          ))}
-        </div>
-      )}
-      {!turn.pending && turn.sources && turn.sources.length > 0 && (
-        <div className="sources-line">
-          <span className="eyebrow">From your vault</span>
-          {turn.sources.map((s) => (
-            <button key={`${s.path}#${s.heading ?? ''}`} className="source-chip" onClick={() => api.memory.open(s.path)} title={s.path}>
-              {s.title}
-              {s.heading ? <span> › {s.heading}</span> : null}
-            </button>
-          ))}
         </div>
       )}
       {relay && <RelayInline run={relay} onOpen={() => onOpenRelay(relay.id)} />}

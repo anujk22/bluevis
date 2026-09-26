@@ -109,6 +109,8 @@ export interface Turn {
   /** Vault passages the model was given for this reply. */
   sources?: SourceRef[]
   relayId?: string
+  /** A short live status while nothing else is visible yet (e.g. loading the local model). */
+  status?: string
   /** What the model thought before answering, shown folded under the reply. */
   thinking?: string
   thoughtMs?: number
@@ -181,6 +183,8 @@ export interface Settings {
   localBaseUrl: string
   /** narrate: brief reads short replies whole and the lead of long ones; full reads everything; mute reads nothing. */
   voice: { enabled: boolean; ttsVoice: string; speed: number; narrate: Narration }
+  /** Ultra thinking: high effort, and the model may split work across parallel agents. */
+  ultra?: boolean
   /** Always-on local listening for "Hey Vesper". */
   wake?: boolean
   /** Global shortcut (Electron accelerator) that starts and stops dictation into the focused app. */

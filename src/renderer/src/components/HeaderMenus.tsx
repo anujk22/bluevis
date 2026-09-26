@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ModelChoice, Settings, Turn, AgentTask } from '../../../core/types'
 import type { RelayRun } from '../../../core/relay'
-import { Bell, Chevron, Gear } from './icons'
+import { Bell, Chevron } from './icons'
 import { until, type UsageState } from './Usage'
 
 export function Popover({ button, children, align = 'right', label }: { button: (open: boolean) => ReactNode; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; label: string }) {
@@ -34,7 +34,8 @@ export function Popover({ button, children, align = 'right', label }: { button: 
 
 /** Everything the header menu can offer; Settings picks which of these show. */
 export const MODELS: { label: string; choice: ModelChoice; note: string }[] = [
-  { label: 'Qwen 3.6 (local)', choice: { provider: 'local', model: 'incoai/Qwen3.6-35B-A3B-Splash', effort: 'low' }, note: 'Splash · private, thinks briefly' },
+  { label: 'Qwen 3.8 27B (local)', choice: { provider: 'local', model: 'incoai/Qwen3.8-27B-Splash', effort: 'low' }, note: 'Splash · smartest local, ~65 tok/s' },
+  { label: 'Qwen 3.6 35B-A3B (local)', choice: { provider: 'local', model: 'incoai/Qwen3.6-35B-A3B-Splash', effort: 'low' }, note: 'Splash · fastest local, ~95 tok/s' },
   { label: 'GPT-6-Luna', choice: { provider: 'codex', model: 'gpt-6-luna', effort: 'low' }, note: 'Codex · fast' },
   { label: 'GPT-6-Sol', choice: { provider: 'codex', model: 'gpt-6-sol', effort: 'low' }, note: 'Codex · balanced' },
   { label: 'GPT-6-Astra', choice: { provider: 'codex', model: 'gpt-6-astra', effort: 'medium' }, note: 'Codex · deepest' },
@@ -97,56 +98,6 @@ export function ModelMenu({ settings, label, usage, onChange }: { settings: Sett
               </div>
             )
           })}
-        </div>
-      )}
-    </Popover>
-  )
-}
-
-type Effort = ModelChoice['effort']
-const EFFORTS: { effort: Effort; label: string; note: string }[] = [
-  { effort: undefined, label: 'Off', note: 'answers right away' },
-  { effort: 'minimal', label: 'Minimal', note: 'a quick check' },
-  { effort: 'low', label: 'Low', note: 'a few seconds' },
-  { effort: 'medium', label: 'Medium', note: 'thinks it through' },
-  { effort: 'high', label: 'High', note: 'slowest, most careful' }
-]
-
-/** Thinking effort for the conversation model. Local models can turn thinking off; Codex always thinks a little. */
-export function EffortMenu({ settings, onChange }: { settings: Settings | null; onChange: (s: Settings) => void }) {
-  const api = window.bluevis
-  const cur = settings?.brain
-  if (!cur || cur.provider === 'claude') return null
-  const options = cur.provider === 'local' ? EFFORTS.filter((e) => e.effort !== 'minimal') : EFFORTS.filter((e) => e.effort)
-  const now = options.find((o) => o.effort === cur.effort) ?? options[0]
-  return (
-    <Popover
-      label={`Thinking: ${now.label}`}
-      button={() => (
-        <span className="icon-btn" title={`Thinking: ${now.label}`}>
-          <Gear />
-        </span>
-      )}
-    >
-      {(close) => (
-        <div className="menu">
-          <div className="eyebrow menu-head">Thinking</div>
-          {options.map((o) => (
-            <button
-              key={o.label}
-              className="menu-item"
-              role="menuitemradio"
-              aria-checked={o === now}
-              onClick={async () => {
-                const { effort: _, ...rest } = cur
-                onChange((await api.settings.set({ brain: o.effort ? { ...rest, effort: o.effort } : rest })) as Settings)
-                close()
-              }}
-            >
-              <span>{o.label}</span>
-              <span className="mono menu-note">{o.note}</span>
-            </button>
-          ))}
         </div>
       )}
     </Popover>
